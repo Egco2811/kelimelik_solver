@@ -97,6 +97,7 @@ const app = createApp({
             const classes = [];
             if (premium) classes.push(premium);
             else classes.push('empty');
+            if (this.board[r-1][c-1]) classes.push('has-letter');
             if (this.cursor.row === r && this.cursor.col === c) classes.push('cursor');
             if (this.isNextCell(r,c) && !this.board[r-1][c-1]) classes.push('next-cell');
             if (this.isHighlighted(r,c)) classes.push('highlight-cell');
@@ -142,8 +143,10 @@ const app = createApp({
             if (this.directionMode && this.directionAnchor &&
                 this.directionAnchor.row === r && this.directionAnchor.col === c) {
                 if (this.directionPos === 0) {
+                    // Toggle orientation only if no letters typed yet
                     this.directionOrientation = this.directionOrientation === 'right' ? 'down' : 'right';
                 } else {
+                    // Already typing, exit direction mode
                     this.directionMode = false;
                     this.directionAnchor = null;
                 }
@@ -209,21 +212,50 @@ const app = createApp({
         },
         onKey(e) {
             const key = e.key;
+
             if (this.directionMode && this.directionAnchor) {
-                if (key.startsWith('Arrow')) {
+                // Arrow keys: move anchor in that direction (preserve direction mode)
+                if (key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight') {
+                    e.preventDefault();
+                    let newRow = this.cursor.row;
+                    let newCol = this.cursor.col;
+                    if (key === 'ArrowUp') newRow = Math.max(1, this.cursor.row - 1);
+                    else if (key === 'ArrowDown') newRow = Math.min(SIZE, this.cursor.row + 1);
+                    else if (key === 'ArrowLeft') newCol = Math.max(1, this.cursor.col - 1);
+                    else if (key === 'ArrowRight') newCol = Math.min(SIZE, this.cursor.col + 1);
+                    this.directionAnchor = { row: newRow, col: newCol };
+                    this.cursor = { row: newRow, col: newCol };
+                    this.directionPos = 0;  // reset typing offset
+                    return;
+                }
+                // Enter: toggle orientation (only if no letters typed yet)
+                if (key === 'Enter') {
+                    e.preventDefault();
+                    if (this.directionPos === 0) {
+                        this.directionOrientation = this.directionOrientation === 'right' ? 'down' : 'right';
+                    }
+                    return;
+                }
+                // Escape: exit direction mode
+                if (key === 'Escape') {
                     e.preventDefault();
                     this.directionMode = false;
                     this.directionAnchor = null;
-                } else if (key === ' ') {
+                    return;
+                }
+                // Space
+                if (key === ' ') {
                     e.preventDefault();
-                    const nxt = this.directionPos+1;
+                    const nxt = this.directionPos + 1;
                     const nc = this.getCellAt(nxt);
                     if (nc.row>=1 && nc.row<=SIZE && nc.col>=1 && nc.col<=SIZE) {
                         this.directionPos = nxt;
                         this.cursor = {row:nc.row, col:nc.col};
                     }
                     return;
-                } else if (key === 'Backspace' || key === 'Delete') {
+                }
+                // Backspace/Delete
+                if (key === 'Backspace' || key === 'Delete') {
                     e.preventDefault();
                     if (this.directionPos > 0) {
                         this.directionPos--;
@@ -239,7 +271,9 @@ const app = createApp({
                         }
                     }
                     return;
-                } else if (key.length === 1) {
+                }
+                // Letter
+                if (key.length === 1) {
                     const letter = turkishUpper(key);
                     if (letter in POINTS) {
                         e.preventDefault();
@@ -250,13 +284,11 @@ const app = createApp({
                         this.directionPos++;
                     }
                     return;
-                } else if (key === 'Escape') {
-                    this.directionMode = false;
-                    this.directionAnchor = null;
                 }
                 return;
             }
 
+            // Normal mode (no direction)
             if (key.startsWith('Arrow')) {
                 e.preventDefault();
                 if (key === 'ArrowUp' && this.cursor.row>1) this.cursor.row--;
@@ -393,7 +425,6 @@ const app = createApp({
     },
     mounted() {
         this.loadGame();
-        // Auto-solve on initial load (after cookies restored)
         this.$nextTick(() => {
             this.triggerSolve();
         });
