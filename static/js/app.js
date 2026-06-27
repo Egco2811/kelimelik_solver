@@ -84,7 +84,6 @@ const app = createApp({
             highlightedMove: null,
             highlightedCells: [],
 
-            // Resize observer
             resizeObserver: null,
         };
     },
@@ -167,7 +166,6 @@ const app = createApp({
                 this.ctxMenu.x = event.touches[0].clientX;
                 this.ctxMenu.y = event.touches[0].clientY;
             }
-            // keep within viewport
             const mw = 200, mh = 160;
             if (this.ctxMenu.x + mw > window.innerWidth) this.ctxMenu.x = window.innerWidth - mw - 10;
             if (this.ctxMenu.y + mh > window.innerHeight) this.ctxMenu.y = window.innerHeight - mh - 10;
@@ -385,14 +383,13 @@ const app = createApp({
             }
         },
 
-        // ---- DYNAMIC SIZING ----
         resizeBoard() {
-            const leftPanel = this.$refs.leftPanel;
             const boardWrapper = this.$refs.boardWrapper;
+            const leftPanel = this.$refs.leftPanel;
             const rack = this.$el?.querySelector('.rack-section');
             const buttons = this.$el?.querySelector('.button-row');
 
-            if (!leftPanel || !boardWrapper) return;
+            if (!boardWrapper || !leftPanel) return;
 
             const panelWidth = leftPanel.clientWidth;
             const panelHeight = leftPanel.clientHeight;
@@ -400,14 +397,11 @@ const app = createApp({
             const rackH = rack ? rack.offsetHeight : 0;
             const btnH = buttons ? buttons.offsetHeight : 0;
             const gap = 12;
-            const usedHeight = rackH + btnH + gap * 2;
+            const padding = 16;
+            const usedHeight = rackH + btnH + gap * 2 + padding;
 
-            let availableHeight = panelHeight - usedHeight - 16;
+            let availableHeight = panelHeight - usedHeight;
             if (availableHeight < 60) availableHeight = 60;
-
-            const pad = parseInt(getComputedStyle(boardWrapper).padding) * 2 || 20;
-            const border = parseInt(getComputedStyle(boardWrapper).borderWidth) * 2 || 8;
-            const extra = pad + border;
 
             let size = Math.min(panelWidth - 8, availableHeight);
             size = Math.max(size, 60);
