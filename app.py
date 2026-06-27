@@ -1,16 +1,21 @@
-import os
-from flask import Flask, render_template
-from dotenv import load_dotenv
-
-load_dotenv()  # load .env file if present
+from flask import Flask, render_template, request, jsonify
+from solver.main import init_dictionary, find_best_moves
 
 app = Flask(__name__)
-app.config['DEBUG'] = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
+@app.route('/solve', methods=['POST'])
+def solve():
+    data = request.json
+    board_state = data['board']
+    rack = data['rack']
+    bonus_tile = data.get('bonus')
+    moves = find_best_moves(board_state, rack, bonus_tile)
+    return jsonify(moves)
+
 if __name__ == '__main__':
-    port = int(os.getenv('FLASK_PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    init_dictionary('data/kelimelik_words.txt')
+    app.run(debug=True, host='0.0.0.0')

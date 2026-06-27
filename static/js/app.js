@@ -7,7 +7,6 @@ const POINTS = {
     'P':5,'R':1,'S':2,'Ş':3,'T':1,'U':2,'Ü':5,'V':4,'Y':4,'Z':4
 };
 
-// Turkish‑aware uppercase
 const LOWER_TO_UPPER = {
     'a':'A','b':'B','c':'C','ç':'Ç','d':'D','e':'E','f':'F','g':'G',
     'ğ':'Ğ','h':'H','ı':'I','i':'İ','j':'J','k':'K','l':'L','m':'M',
@@ -48,7 +47,6 @@ const bonusStarSVG = `<svg viewBox="0 0 100 100" style="width:100%;height:100%;"
     <use href="#bstar" transform="translate(45,50) scale(0.5)"/>
 </svg>`;
 
-// Cookie helpers
 function setCookie(name, value, days=365) {
     const d = new Date();
     d.setTime(d.getTime() + (days*24*60*60*1000));
@@ -58,6 +56,8 @@ function getCookie(name) {
     const c = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
     return c ? decodeURIComponent(c[2]) : null;
 }
+
+let solveTimer = null;
 
 const app = createApp({
     data() {
@@ -77,7 +77,12 @@ const app = createApp({
 
             longPressTimer: null,
             longPressCell: null,
-            ignoreNextClick: false
+            ignoreNextClick: false,
+
+            solving: false,
+            results: [],
+            highlightedMove: null,
+            highlightedCells: []
         };
     },
     methods: {
@@ -94,7 +99,22 @@ const app = createApp({
             else classes.push('empty');
             if (this.cursor.row === r && this.cursor.col === c) classes.push('cursor');
             if (this.isNextCell(r,c) && !this.board[r-1][c-1]) classes.push('next-cell');
+            if (this.isHighlighted(r,c)) classes.push('highlight-cell');
+            if (this.isNewTile(r,c)) classes.push('new-tile');
             return classes;
+        },
+        isHighlighted(r,c) {
+            if (!this.highlightedMove) return false;
+            const m = this.highlightedMove;
+            const dr = m.direction === 'down' ? 1 : 0;
+            const dc = m.direction === 'right' ? 1 : 0;
+            for (let i = 0; i < m.word.length; i++) {
+                if (m.start_row + i*dr === r && m.start_col + i*dc === c) return true;
+            }
+            return false;
+        },
+        isNewTile(r,c) {
+            return this.highlightedCells.some(cell => cell.row === r && cell.col === c);
         },
         premiumLabel(r,c) {
             const premium = this.premiumType(r,c);
@@ -138,13 +158,13 @@ const app = createApp({
         },
         rightClick(r,c,event) {
             if (event) event.preventDefault();
-            this.ctxMenu = { r, c, x: (event ? event.clientX : 0), y: (event ? event.clientY : 0) };
+            this.ctxMenu = { r, c, x: event ? event.clientX : 0, y: event ? event.clientY : 0 };
             if (event && event.touches) {
                 this.ctxMenu.x = event.touches[0].clientX;
                 this.ctxMenu.y = event.touches[0].clientY;
             }
         },
-        handleTouchStart(r,c, event) {
+        handleTouchStart(r,c,event) {
             this.ignoreNextClick = false;
             this.longPressCell = { r, c };
             this.longPressTimer = setTimeout(() => {
@@ -189,7 +209,6 @@ const app = createApp({
         },
         onKey(e) {
             const key = e.key;
-
             if (this.directionMode && this.directionAnchor) {
                 if (key.startsWith('Arrow')) {
                     e.preventDefault();
@@ -238,7 +257,6 @@ const app = createApp({
                 return;
             }
 
-            // Normal mode
             if (key.startsWith('Arrow')) {
                 e.preventDefault();
                 if (key === 'ArrowUp' && this.cursor.row>1) this.cursor.row--;
@@ -269,10 +287,78 @@ const app = createApp({
                 }
             }
         },
-
         focusBoardInput() { this.$refs.boardInput?.focus(); },
         onBoardInputBlur() {},
         focusRackInput() { this.$refs.rackInput?.focus(); },
+
+        triggerSolve() {
+            if (solveTimer) clearTimeout(solveTimer);
+            solveTimer = setTimeout(() => {
+                this.solveBoard();
+            }, 400);
+        },
+
+        async solveBoard() {
+            if (this.rack.length === 0) {
+                this.results = [];
+                this.highlightedMove = null;
+                return;
+            }
+            this.solving = true;
+            const payload = {
+                board: this.board,
+                rack: this.rack,
+                bonus: this.bonusKey ? this.bonusKey.split(',').map(Number) : null
+            };
+            try {
+                const res = await fetch('/solve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) throw new Error('Sunucu hatası');
+                const data = await res.json();
+                this.results = data;
+                if (data.length > 0) {
+                    this.highlightedMove = data[0];
+                } else {
+                    this.highlightedMove = null;
+                }
+            } catch (err) {
+                console.error('Çözüm alınamadı:', err);
+            } finally {
+                this.solving = false;
+            }
+        },
+
+        applyMove(move) {
+            const oldBoard = this.board.map(row => [...row]);
+            const dr = move.direction === 'down' ? 1 : 0;
+            const dc = move.direction === 'right' ? 1 : 0;
+            const newCells = [];
+            for (let i = 0; i < move.word.length; i++) {
+                const r = move.start_row + i*dr;
+                const c = move.start_col + i*dc;
+                if (!oldBoard[r-1][c-1]) {
+                    newCells.push({ row: r, col: c });
+                }
+                this.board[r-1][c-1] = move.word[i];
+            }
+            for (const lt of move.rack_used) {
+                const idx = this.rack.indexOf(lt);
+                if (idx !== -1) {
+                    this.rack.splice(idx, 1);
+                }
+            }
+            this.highlightedCells = newCells;
+            this.highlightedMove = move;
+            this.results = [];
+        },
+
+        highlightMove(move) {
+            this.highlightedMove = move;
+            this.highlightedCells = [];
+        },
 
         saveGame() {
             const state = { board: this.board, rack: this.rack, bonusKey: this.bonusKey };
@@ -300,19 +386,28 @@ const app = createApp({
             this.directionMode = false;
             this.directionAnchor = null;
             this.cursor = { row: 8, col: 8 };
+            this.results = [];
+            this.highlightedMove = null;
+            this.highlightedCells = [];
         }
     },
     mounted() {
         this.loadGame();
+        // Auto-solve on initial load (after cookies restored)
+        this.$nextTick(() => {
+            this.triggerSolve();
+        });
 
-        watch(() => this.board, (newVal) => this.saveGame(), { deep: true });
-        watch(() => this.rack, (newVal) => this.saveGame(), { deep: true });
-        watch(() => this.bonusKey, (newVal) => this.saveGame());
+        watch(() => this.board, this.saveGame, { deep: true });
+        watch(() => this.rack, this.saveGame, { deep: true });
+        watch(() => this.bonusKey, this.saveGame);
+
+        watch(() => this.board, () => { this.highlightedCells = []; this.triggerSolve(); }, { deep: true });
+        watch(() => this.rack, () => { this.highlightedCells = []; this.triggerSolve(); }, { deep: true });
+        watch(() => this.bonusKey, () => { this.highlightedCells = []; this.triggerSolve(); });
 
         document.addEventListener('click', (e) => {
-            if (this.ctxMenu && !e.target.closest('.context-menu')) {
-                this.ctxMenu = null;
-            }
+            if (this.ctxMenu && !e.target.closest('.context-menu')) this.ctxMenu = null;
         });
     }
 });
