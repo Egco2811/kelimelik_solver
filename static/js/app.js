@@ -1,7 +1,4 @@
-// ============================================================
-//  CONSTANTS
-// ============================================================
-const { createApp, ref, reactive } = Vue;
+const { createApp, ref, reactive, watch } = Vue;
 
 const SIZE = 15;
 const POINTS = {
@@ -26,27 +23,31 @@ setPremium(8,3,'dw'); setPremium(3,8,'dw');
 setPremium(4,4,'dw');
 setPremium(8,8,'star');
 
-// Centre star – large orange star with white "2" on background #f3d386
 const starCenterSVG = `<svg viewBox="0 0 100 100" style="width:100%;height:100%;" xmlns="http://www.w3.org/2000/svg">
     <polygon points="50,10 61,35 90,35 68,55 77,90 50,70 23,90 32,55 10,35 39,35" fill="#fe9908" stroke="#fe9908" stroke-width="8" stroke-linejoin="round"/>
     <text x="50" y="54" text-anchor="middle" dominant-baseline="middle" font-size="28" font-weight="bold" fill="#f3d386" font-family="Segoe UI, sans-serif">2</text>
 </svg>`;
 
-// Bonus tile – three orange stars forming a symmetrical triangle
 const bonusStarSVG = `<svg viewBox="0 0 100 100" style="width:100%;height:100%;" xmlns="http://www.w3.org/2000/svg">
     <defs>
         <polygon id="bstar" points="50,10 57,31 80,31 63,45 69,70 50,57 31,70 37,45 20,31 43,31" fill="#fe9908" stroke="#fe9908" stroke-width="6" stroke-linejoin="round"/>
     </defs>
-    <!-- top star centred -->
     <use href="#bstar" transform="translate(25,8) scale(0.5)"/>
-    <!-- bottom stars centred symmetrically -->
     <use href="#bstar" transform="translate(5,50) scale(0.5)"/>
     <use href="#bstar" transform="translate(45,50) scale(0.5)"/>
 </svg>`;
 
-// ============================================================
-//  VUE APP
-// ============================================================
+// Cookie helpers
+function setCookie(name, value, days=365) {
+    const d = new Date();
+    d.setTime(d.getTime() + (days*24*60*60*1000));
+    document.cookie = `${name}=${encodeURIComponent(value)};expires=${d.toUTCString()};path=/;SameSite=Lax`;
+}
+function getCookie(name) {
+    const c = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
+    return c ? decodeURIComponent(c[2]) : null;
+}
+
 const app = createApp({
     data() {
         return {
@@ -61,7 +62,11 @@ const app = createApp({
             directionMode: false,
             directionAnchor: null,
             directionOrientation: 'right',
-            directionPos: 0
+            directionPos: 0,
+
+            // long press handling
+            longPressTimer: null,
+            longPressCell: null
         };
     },
     methods: {
@@ -99,6 +104,11 @@ const app = createApp({
             return nr === r && nc === c;
         },
         clickCell(r,c) {
+            // If a long press just happened, ignore the click
+            if (this.ignoreNextClick) {
+                this.ignoreNextClick = false;
+                return;
+            }
             if (this.directionMode && this.directionAnchor &&
                 this.directionAnchor.row === r && this.directionAnchor.col === c) {
                 if (this.directionPos === 0) {
@@ -114,11 +124,41 @@ const app = createApp({
                 this.directionPos = 0;
             }
             this.cursor = { row: r, col: c };
-            this.focusBoard();
+            this.focusBoardInput();
         },
+        // Right-click (desktop) and long-press (mobile) handler
         rightClick(r,c,event) {
-            event.preventDefault();
-            this.ctxMenu = { r, c, x: event.clientX, y: event.clientY };
+            if (event) event.preventDefault();
+            this.ctxMenu = { r, c, x: (event ? event.clientX : 0), y: (event ? event.clientY : 0) };
+            // On mobile, event might be undefined, so set position via touch
+            if (event && event.touches) {
+                this.ctxMenu.x = event.touches[0].clientX;
+                this.ctxMenu.y = event.touches[0].clientY;
+            }
+        },
+        // Touch events for long press
+        handleTouchStart(r,c, event) {
+            this.ignoreNextClick = false;
+            this.longPressCell = { r, c };
+            this.longPressTimer = setTimeout(() => {
+                this.longPressTimer = null;
+                this.ignoreNextClick = true;   // prevent click after long press
+                this.rightClick(r, c, event);
+            }, 500); // 500ms
+        },
+        handleTouchMove() {
+            if (this.longPressTimer) {
+                clearTimeout(this.longPressTimer);
+                this.longPressTimer = null;
+                this.longPressCell = null;
+            }
+        },
+        handleTouchEnd(event) {
+            if (this.longPressTimer) {
+                clearTimeout(this.longPressTimer);
+                this.longPressTimer = null;
+                // If timer cleared, it's a short tap – will be handled by clickCell
+            }
         },
         toggleBonus() {
             if (!this.ctxMenu) return;
@@ -143,6 +183,7 @@ const app = createApp({
         },
         onKey(e) {
             const key = e.key;
+
             if (this.directionMode && this.directionAnchor) {
                 if (key.startsWith('Arrow')) {
                     e.preventDefault();
@@ -189,6 +230,7 @@ const app = createApp({
                 return;
             }
 
+            // Normal mode
             if (key.startsWith('Arrow')) {
                 e.preventDefault();
                 if (key === 'ArrowUp' && this.cursor.row>1) this.cursor.row--;
@@ -213,12 +255,51 @@ const app = createApp({
                 if (this.rack.length < 7) this.rack.push(key.toUpperCase());
             }
         },
-        focusRack() { this.$el.querySelector('.rack-input-container')?.focus(); },
-        focusBoard() { this.$el.querySelector('.board-wrapper')?.focus(); }
+
+        focusBoardInput() { this.$refs.boardInput?.focus(); },
+        onBoardInputBlur() {},
+        focusRackInput() { this.$refs.rackInput?.focus(); },
+
+        // Save & Load
+        saveGame() {
+            const state = { board: this.board, rack: this.rack, bonusKey: this.bonusKey };
+            setCookie('kelimelik_save', JSON.stringify(state));
+        },
+        loadGame() {
+            const saved = getCookie('kelimelik_save');
+            if (saved) {
+                try {
+                    const state = JSON.parse(saved);
+                    if (state.board && Array.isArray(state.board) && state.board.length === SIZE) {
+                        this.board = state.board;
+                    }
+                    if (state.rack && Array.isArray(state.rack)) {
+                        this.rack = state.rack.slice(0, 7);
+                    }
+                    if (state.bonusKey !== undefined) this.bonusKey = state.bonusKey;
+                } catch(e) {}
+            }
+        },
+        resetGame() {
+            this.board = Array(SIZE).fill().map(() => Array(SIZE).fill(null));
+            this.rack = [];
+            this.bonusKey = null;
+            this.directionMode = false;
+            this.directionAnchor = null;
+            this.cursor = { row: 8, col: 8 };
+        }
     },
     mounted() {
+        this.loadGame();
+
+        watch(() => this.board, (newVal) => this.saveGame(), { deep: true });
+        watch(() => this.rack, (newVal) => this.saveGame(), { deep: true });
+        watch(() => this.bonusKey, (newVal) => this.saveGame());
+
         document.addEventListener('click', (e) => {
-            if (this.ctxMenu && !e.target.closest('.context-menu')) this.ctxMenu = null;
+            if (this.ctxMenu && !e.target.closest('.context-menu')) {
+                this.ctxMenu = null;
+            }
         });
     }
 });
