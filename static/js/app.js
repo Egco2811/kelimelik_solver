@@ -82,7 +82,10 @@ const app = createApp({
             solving: false,
             results: [],
             highlightedMove: null,
-            highlightedCells: []
+            highlightedCells: [],
+
+            // Resize observer
+            resizeObserver: null,
         };
     },
     methods: {
@@ -102,7 +105,7 @@ const app = createApp({
             if (this.isNextCell(r,c) && !this.board[r-1][c-1]) classes.push('next-cell');
             if (this.isHighlighted(r,c)) classes.push('highlight-cell');
             if (this.isNewTile(r,c)) classes.push('new-tile');
-            return classes;
+            return classes.join(' ');
         },
         isHighlighted(r,c) {
             if (!this.highlightedMove) return false;
@@ -164,6 +167,12 @@ const app = createApp({
                 this.ctxMenu.x = event.touches[0].clientX;
                 this.ctxMenu.y = event.touches[0].clientY;
             }
+            // keep within viewport
+            const mw = 200, mh = 160;
+            if (this.ctxMenu.x + mw > window.innerWidth) this.ctxMenu.x = window.innerWidth - mw - 10;
+            if (this.ctxMenu.y + mh > window.innerHeight) this.ctxMenu.y = window.innerHeight - mh - 10;
+            if (this.ctxMenu.x < 10) this.ctxMenu.x = 10;
+            if (this.ctxMenu.y < 10) this.ctxMenu.y = 10;
         },
         handleTouchStart(r,c,event) {
             this.ignoreNextClick = false;
@@ -357,47 +366,55 @@ const app = createApp({
             this.highlightedCells = newCells;
             this.highlightedMove = move;
             this.results = [];
+            this.directionMode = false;
+            this.directionAnchor = null;
         },
 
         highlightMove(move) {
             this.highlightedMove = move;
-            this.highlightedCells = [];
+            if (!move) {
+                this.highlightedCells = [];
+            } else {
+                const dr = move.direction === 'down' ? 1 : 0;
+                const dc = move.direction === 'right' ? 1 : 0;
+                const cells = [];
+                for (let i = 0; i < move.word.length; i++) {
+                    cells.push({ row: move.start_row + i*dr, col: move.start_col + i*dc });
+                }
+                this.highlightedCells = cells;
+            }
         },
 
+        // ---- DYNAMIC SIZING ----
         resizeBoard() {
-        if (window.innerWidth <= 768) return;
-            const leftPanel = this.$el?.querySelector('.left-panel');
-        if (window.innerWidth <= 768) return;
-            const boardWrapper = this.$el?.querySelector('.board-wrapper');
-        if (window.innerWidth <= 768) return;
-            if (!leftPanel || !boardWrapper) return;
-        if (window.innerWidth <= 768) return;
-            const panelWidth = leftPanel.clientWidth;
-        if (window.innerWidth <= 768) return;
-            const panelHeight = leftPanel.clientHeight;
-        if (window.innerWidth <= 768) return;
+            const leftPanel = this.$refs.leftPanel;
+            const boardWrapper = this.$refs.boardWrapper;
             const rack = this.$el?.querySelector('.rack-section');
-        if (window.innerWidth <= 768) return;
             const buttons = this.$el?.querySelector('.button-row');
-        if (window.innerWidth <= 768) return;
+
+            if (!leftPanel || !boardWrapper) return;
+
+            const panelWidth = leftPanel.clientWidth;
+            const panelHeight = leftPanel.clientHeight;
+
             const rackH = rack ? rack.offsetHeight : 0;
-        if (window.innerWidth <= 768) return;
             const btnH = buttons ? buttons.offsetHeight : 0;
-        if (window.innerWidth <= 768) return;
-            const usedHeight = rackH + btnH + 16;
-        if (window.innerWidth <= 768) return;
-            let availableHeight = panelHeight - usedHeight;
-        if (window.innerWidth <= 768) return;
-            if (availableHeight < 100) availableHeight = 100;
-        if (window.innerWidth <= 768) return;
-            const size = Math.min(panelWidth, availableHeight);
-        if (window.innerWidth <= 768) return;
+            const gap = 12;
+            const usedHeight = rackH + btnH + gap * 2;
+
+            let availableHeight = panelHeight - usedHeight - 16;
+            if (availableHeight < 60) availableHeight = 60;
+
+            const pad = parseInt(getComputedStyle(boardWrapper).padding) * 2 || 20;
+            const border = parseInt(getComputedStyle(boardWrapper).borderWidth) * 2 || 8;
+            const extra = pad + border;
+
+            let size = Math.min(panelWidth - 8, availableHeight);
+            size = Math.max(size, 60);
+
             boardWrapper.style.width = size + 'px';
-        if (window.innerWidth <= 768) return;
             boardWrapper.style.height = size + 'px';
-        if (window.innerWidth <= 768) return;
             boardWrapper.style.maxWidth = size + 'px';
-        if (window.innerWidth <= 768) return;
             boardWrapper.style.maxHeight = size + 'px';
         },
 
@@ -426,37 +443,77 @@ const app = createApp({
             this.results = [];
             this.highlightedMove = null;
             this.highlightedCells = [];
+            this.ctxMenu = null;
         }
     },
     mounted() {
         this.loadGame();
+
         this.$nextTick(() => {
-            setTimeout(() => this.resizeBoard(), 100);
-            setTimeout(() => this.resizeBoard(), 500);
-            window.addEventListener('resize', this.resizeBoard);
-            window.addEventListener('orientationchange', () => setTimeout(this.resizeBoard, 100));
-            const leftPanel = this.$el?.querySelector('.left-panel');
+            setTimeout(() => this.resizeBoard(), 50);
+            setTimeout(() => this.resizeBoard(), 300);
+            setTimeout(() => this.resizeBoard(), 800);
+        });
+
+        if (window.ResizeObserver) {
+            this.resizeObserver = new ResizeObserver(() => {
+                this.resizeBoard();
+            });
+            const leftPanel = this.$refs.leftPanel;
             if (leftPanel) {
-                const ro = new ResizeObserver(() => this.resizeBoard());
-                ro.observe(leftPanel);
+                this.resizeObserver.observe(leftPanel);
             }
+        }
+
+        window.addEventListener('resize', this.resizeBoard);
+        window.addEventListener('orientationchange', () => {
+            setTimeout(this.resizeBoard, 200);
+        });
+
+        this.triggerSolve();
+
+        watch(() => this.board, () => {
+            this.highlightedCells = [];
+            this.saveGame();
+            this.triggerSolve();
+        }, { deep: true });
+
+        watch(() => this.rack, () => {
+            this.highlightedCells = [];
+            this.saveGame();
+            this.triggerSolve();
+            this.$nextTick(this.resizeBoard);
+        }, { deep: true });
+
+        watch(() => this.bonusKey, () => {
+            this.highlightedCells = [];
+            this.saveGame();
             this.triggerSolve();
         });
-        watch(() => this.board, this.saveGame, { deep: true });
-        watch(() => this.rack, this.saveGame, { deep: true });
-        watch(() => this.bonusKey, this.saveGame);
-        watch(() => this.board, () => { this.highlightedCells = []; this.triggerSolve(); }, { deep: true });
-        watch(() => this.rack, () => { this.highlightedCells = []; this.triggerSolve(); }, { deep: true });
-        watch(() => this.bonusKey, () => { this.highlightedCells = []; this.triggerSolve(); });
-        watch(() => this.rack, () => this.$nextTick(this.resizeBoard));
-        watch(() => this.results, () => this.$nextTick(this.resizeBoard));
+
+        watch(() => this.results, () => {
+            this.$nextTick(this.resizeBoard);
+        });
+
         document.addEventListener('click', (e) => {
             if (this.ctxMenu && !e.target.closest('.context-menu')) this.ctxMenu = null;
+        });
+
+        this.$nextTick(() => {
+            this.focusBoardInput();
         });
     },
     unmounted() {
         window.removeEventListener('resize', this.resizeBoard);
         window.removeEventListener('orientationchange', this.resizeBoard);
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+            this.resizeObserver = null;
+        }
+        if (solveTimer) {
+            clearTimeout(solveTimer);
+            solveTimer = null;
+        }
     }
 });
 

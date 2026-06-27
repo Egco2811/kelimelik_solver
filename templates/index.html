@@ -17,8 +17,8 @@
             <!-- Main row: board+rack on left, results on right -->
             <div class="main-row">
                 <!-- Left column: board + rack + buttons -->
-                <div class="left-panel">
-                    <div class="board-wrapper" @click="focusBoardInput" @contextmenu.prevent>
+                <div class="left-panel" ref="leftPanel">
+                    <div class="board-wrapper" ref="boardWrapper" @click="focusBoardInput" @contextmenu.prevent>
                         <table id="board">
                             <tr v-for="r in 15" :key="r">
                                 <td v-for="c in 15" :key="c"
