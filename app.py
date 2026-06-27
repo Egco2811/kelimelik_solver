@@ -3,6 +3,9 @@ from solver.main import init_dictionary, find_best_moves
 
 app = Flask(__name__)
 
+# Load the dictionary at startup (runs when this module is imported by gunicorn)
+init_dictionary('data/kelimelik_words.txt')
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -17,5 +20,5 @@ def solve():
     return jsonify(moves)
 
 if __name__ == '__main__':
-    init_dictionary('data/kelimelik_words.txt')
+    # In development, Flask’s dev server will also use this block
     app.run(debug=True, host='0.0.0.0')
