@@ -14,69 +14,77 @@
         <div class="game-container text-center">
             <h1 class="mb-4">KELİMELİK ÇÖZÜCÜ</h1>
 
-            <!-- Board -->
-            <div class="board-wrapper" @click="focusBoardInput" @contextmenu.prevent>
-                <table id="board">
-                    <tr v-for="r in 15" :key="r">
-                        <td v-for="c in 15" :key="c"
-                            :class="cellClass(r,c)"
-                            @click="clickCell(r,c)"
-                            @contextmenu.stop="rightClick(r,c,$event)"
-                            @touchstart.stop="handleTouchStart(r,c,$event)"
-                            @touchmove.stop="handleTouchMove"
-                            @touchend.stop="handleTouchEnd($event)">
-                            <!-- Premium overlay (no letter) -->
-                            <span v-if="!board[r-1][c-1] && premiumType(r,c)" class="premium-text" v-html="premiumLabel(r,c)"></span>
-                            <!-- Letter -->
-                            <template v-if="board[r-1][c-1]">
-                                <span class="tile-letter">{{ board[r-1][c-1] }}</span>
-                                <span class="tile-point">{{ points[board[r-1][c-1]] }}</span>
-                            </template>
-                            <!-- Direction arrow for next empty cell -->
-                            <span v-if="isNextCell(r,c) && !board[r-1][c-1]" class="next-arrow">
-                                {{ directionOrientation === 'right' ? '→' : '↓' }}
-                            </span>
-                        </td>
-                    </tr>
-                </table>
-                <input ref="boardInput" class="hidden-input" @keydown="onKey" @blur="onBoardInputBlur"/>
-            </div>
+            <!-- Main row: board+rack on left, results on right -->
+            <div class="main-row">
+                <!-- Left column: board + rack + buttons -->
+                <div class="left-panel" ref="leftPanel">
+                    <div class="board-wrapper" ref="boardWrapper" @click="focusBoardInput" @contextmenu.prevent>
+                        <table id="board">
+                            <tr v-for="r in 15" :key="r">
+                                <td v-for="c in 15" :key="c"
+                                    :class="cellClass(r,c)"
+                                    @click="clickCell(r,c)"
+                                    @contextmenu.stop="rightClick(r,c,$event)"
+                                    @touchstart.stop="handleTouchStart(r,c,$event)"
+                                    @touchmove.stop="handleTouchMove"
+                                    @touchend.stop="handleTouchEnd($event)">
+                                    <span v-if="!board[r-1][c-1] && premiumType(r,c)" class="premium-text" v-html="premiumLabel(r,c)"></span>
+                                    <template v-if="board[r-1][c-1]">
+                                        <span class="tile-letter">{{ board[r-1][c-1] }}</span>
+                                        <span class="tile-point">{{ points[board[r-1][c-1]] }}</span>
+                                    </template>
+                                    <span v-if="isNextCell(r,c) && !board[r-1][c-1]" class="next-arrow">
+                                        {{ directionOrientation === 'right' ? '→' : '↓' }}
+                                    </span>
+                                </td>
+                            </tr>
+                        </table>
+                        <input ref="boardInput" class="hidden-input" @keydown="onKey" @blur="onBoardInputBlur"/>
+                    </div>
 
-            <!-- Rack -->
-            <div class="rack-section">
-                <div class="rack-label">Elinizdeki Harfler</div>
-                <div class="rack-input-container"
-                     :class="{ 'rack-focused': rackFocused }"
-                     @click="focusRackInput">
-                    <div v-if="rack.length === 0" class="rack-placeholder">
-                        Buraya tıklayıp harf yazın...
+                    <!-- Rack -->
+                    <div class="rack-section">
+                        <div class="rack-label">Elinizdeki Harfler</div>
+                        <div class="rack-input-container"
+                             :class="{ 'rack-focused': rackFocused }"
+                             @click="focusRackInput">
+                            <div v-if="rack.length === 0" class="rack-placeholder">
+                                Buraya tıklayıp harf yazın...
+                            </div>
+                            <div v-for="(letter, idx) in rack" :key="idx" class="rack-tile">
+                                {{ letter }}<span class="point">{{ points[letter] }}</span>
+                            </div>
+                            <input ref="rackInput" class="hidden-input" @keydown="onRackKey" @focus="rackFocused=true" @blur="rackFocused=false"/>
+                        </div>
                     </div>
-                    <div v-for="(letter, idx) in rack" :key="idx" class="rack-tile">
-                        {{ letter }}<span class="point">{{ points[letter] }}</span>
+
+                    <!-- Buttons -->
+                    <div class="button-row">
+                        <button class="btn btn-wood me-2" @click="resetGame">Yeni Oyun</button>
+                        <button class="btn btn-wood me-2" @click="solveBoard" :disabled="solving">
+                            <span v-if="solving" class="spinner"></span>
+                            {{ solving ? 'Çözülüyor...' : 'En İyi Hamleyi Bul' }}
+                        </button>
                     </div>
-                    <input ref="rackInput" class="hidden-input" @keydown="onRackKey" @focus="rackFocused=true" @blur="rackFocused=false"/>
                 </div>
-            </div>
 
-            <!-- Buttons -->
-            <div class="text-center mt-3">
-                <button class="btn btn-wood me-2" @click="resetGame">Yeni Oyun</button>
-            </div>
-
-            <!-- Results -->
-            <div v-if="results.length > 0" class="results-container mt-3">
-                <h3 class="text-light">Önerilen Hamleler</h3>
-                <div v-for="(move, idx) in results" :key="idx" class="result-item"
-                     @click="applyMove(move)">
-                    <div class="d-flex justify-content-between">
-                        <strong>{{ move.word }}</strong>
-                        <span class="badge bg-success">{{ move.score }} puan</span>
+                <!-- Right panel: results (only shown when results exist) -->
+                <div v-if="results.length > 0" class="results-panel">
+                    <h3 class="text-light">Önerilen Hamleler</h3>
+                    <div class="results-scroll">
+                        <div v-for="(move, idx) in results" :key="idx" class="result-item"
+                             @click="applyMove(move)">
+                            <div class="d-flex justify-content-between">
+                                <strong>{{ move.word }}</strong>
+                                <span class="badge bg-success">{{ move.score }} puan</span>
+                            </div>
+                            <small>
+                                Başlangıç: {{ move.start_row }}, {{ move.start_col }} |
+                                Yön: {{ move.direction === 'right' ? 'Yatay' : 'Dikey' }} |
+                                Kullanılan: {{ move.rack_used.join(', ') }}
+                            </small>
+                        </div>
                     </div>
-                    <small>
-                        Başlangıç: {{ move.start_row }}, {{ move.start_col }} |
-                        Yön: {{ move.direction === 'right' ? 'Yatay' : 'Dikey' }} |
-                        Kullanılan: {{ move.rack_used.join(', ') }}
-                    </small>
                 </div>
             </div>
 

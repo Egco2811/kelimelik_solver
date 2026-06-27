@@ -1,4 +1,4 @@
-const { createApp, ref, reactive, watch } = Vue;
+const { createApp, ref, reactive, watch, nextTick } = Vue;
 
 const SIZE = 15;
 const POINTS = {
@@ -26,8 +26,8 @@ function setPremium(r,c,type) {
 }
 setPremium(1,3,'tw'); setPremium(3,1,'tw');
 setPremium(2,2,'tl'); setPremium(5,5,'tl');
-setPremium(1,6,'tl'); setPremium(6,1,'dl');
-setPremium(2,7,'tl'); setPremium(7,2,'dl');
+setPremium(1,6,'dl'); setPremium(6,1,'dl');
+setPremium(2,7,'dl'); setPremium(7,2,'dl');
 setPremium(6,6,'dl'); setPremium(7,7,'dl');
 setPremium(8,3,'dw'); setPremium(3,8,'dw');
 setPremium(4,4,'dw');
@@ -82,7 +82,10 @@ const app = createApp({
             solving: false,
             results: [],
             highlightedMove: null,
-            highlightedCells: []
+            highlightedCells: [],
+
+            resizeObserver: null,
+            resizeRAF: null,
         };
     },
     methods: {
@@ -102,7 +105,7 @@ const app = createApp({
             if (this.isNextCell(r,c) && !this.board[r-1][c-1]) classes.push('next-cell');
             if (this.isHighlighted(r,c)) classes.push('highlight-cell');
             if (this.isNewTile(r,c)) classes.push('new-tile');
-            return classes;
+            return classes.join(' ');
         },
         isHighlighted(r,c) {
             if (!this.highlightedMove) return false;
@@ -143,10 +146,8 @@ const app = createApp({
             if (this.directionMode && this.directionAnchor &&
                 this.directionAnchor.row === r && this.directionAnchor.col === c) {
                 if (this.directionPos === 0) {
-                    // Toggle orientation only if no letters typed yet
                     this.directionOrientation = this.directionOrientation === 'right' ? 'down' : 'right';
                 } else {
-                    // Already typing, exit direction mode
                     this.directionMode = false;
                     this.directionAnchor = null;
                 }
@@ -166,6 +167,11 @@ const app = createApp({
                 this.ctxMenu.x = event.touches[0].clientX;
                 this.ctxMenu.y = event.touches[0].clientY;
             }
+            const mw = 200, mh = 160;
+            if (this.ctxMenu.x + mw > window.innerWidth) this.ctxMenu.x = window.innerWidth - mw - 10;
+            if (this.ctxMenu.y + mh > window.innerHeight) this.ctxMenu.y = window.innerHeight - mh - 10;
+            if (this.ctxMenu.x < 10) this.ctxMenu.x = 10;
+            if (this.ctxMenu.y < 10) this.ctxMenu.y = 10;
         },
         handleTouchStart(r,c,event) {
             this.ignoreNextClick = false;
@@ -212,23 +218,19 @@ const app = createApp({
         },
         onKey(e) {
             const key = e.key;
-
             if (this.directionMode && this.directionAnchor) {
-                // Arrow keys: move anchor in that direction (preserve direction mode)
                 if (key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight') {
                     e.preventDefault();
-                    let newRow = this.cursor.row;
-                    let newCol = this.cursor.col;
+                    let newRow = this.cursor.row, newCol = this.cursor.col;
                     if (key === 'ArrowUp') newRow = Math.max(1, this.cursor.row - 1);
                     else if (key === 'ArrowDown') newRow = Math.min(SIZE, this.cursor.row + 1);
                     else if (key === 'ArrowLeft') newCol = Math.max(1, this.cursor.col - 1);
                     else if (key === 'ArrowRight') newCol = Math.min(SIZE, this.cursor.col + 1);
                     this.directionAnchor = { row: newRow, col: newCol };
                     this.cursor = { row: newRow, col: newCol };
-                    this.directionPos = 0;  // reset typing offset
+                    this.directionPos = 0;
                     return;
                 }
-                // Enter: toggle orientation (only if no letters typed yet)
                 if (key === 'Enter') {
                     e.preventDefault();
                     if (this.directionPos === 0) {
@@ -236,14 +238,12 @@ const app = createApp({
                     }
                     return;
                 }
-                // Escape: exit direction mode
                 if (key === 'Escape') {
                     e.preventDefault();
                     this.directionMode = false;
                     this.directionAnchor = null;
                     return;
                 }
-                // Space
                 if (key === ' ') {
                     e.preventDefault();
                     const nxt = this.directionPos + 1;
@@ -254,7 +254,6 @@ const app = createApp({
                     }
                     return;
                 }
-                // Backspace/Delete
                 if (key === 'Backspace' || key === 'Delete') {
                     e.preventDefault();
                     if (this.directionPos > 0) {
@@ -272,7 +271,6 @@ const app = createApp({
                     }
                     return;
                 }
-                // Letter
                 if (key.length === 1) {
                     const letter = turkishUpper(key);
                     if (letter in POINTS) {
@@ -288,7 +286,6 @@ const app = createApp({
                 return;
             }
 
-            // Normal mode (no direction)
             if (key.startsWith('Arrow')) {
                 e.preventDefault();
                 if (key === 'ArrowUp' && this.cursor.row>1) this.cursor.row--;
@@ -325,17 +322,11 @@ const app = createApp({
 
         triggerSolve() {
             if (solveTimer) clearTimeout(solveTimer);
-            solveTimer = setTimeout(() => {
-                this.solveBoard();
-            }, 400);
+            solveTimer = setTimeout(() => { this.solveBoard(); }, 400);
         },
 
         async solveBoard() {
-            if (this.rack.length === 0) {
-                this.results = [];
-                this.highlightedMove = null;
-                return;
-            }
+            if (this.rack.length === 0) { this.results = []; this.highlightedMove = null; return; }
             this.solving = true;
             const payload = {
                 board: this.board,
@@ -351,16 +342,9 @@ const app = createApp({
                 if (!res.ok) throw new Error('Sunucu hatası');
                 const data = await res.json();
                 this.results = data;
-                if (data.length > 0) {
-                    this.highlightedMove = data[0];
-                } else {
-                    this.highlightedMove = null;
-                }
-            } catch (err) {
-                console.error('Çözüm alınamadı:', err);
-            } finally {
-                this.solving = false;
-            }
+                this.highlightedMove = data.length > 0 ? data[0] : null;
+            } catch (err) { console.error('Çözüm alınamadı:', err); }
+            finally { this.solving = false; }
         },
 
         applyMove(move) {
@@ -371,25 +355,79 @@ const app = createApp({
             for (let i = 0; i < move.word.length; i++) {
                 const r = move.start_row + i*dr;
                 const c = move.start_col + i*dc;
-                if (!oldBoard[r-1][c-1]) {
-                    newCells.push({ row: r, col: c });
-                }
+                if (!oldBoard[r-1][c-1]) newCells.push({ row: r, col: c });
                 this.board[r-1][c-1] = move.word[i];
             }
             for (const lt of move.rack_used) {
                 const idx = this.rack.indexOf(lt);
-                if (idx !== -1) {
-                    this.rack.splice(idx, 1);
-                }
+                if (idx !== -1) this.rack.splice(idx, 1);
             }
             this.highlightedCells = newCells;
             this.highlightedMove = move;
             this.results = [];
+            this.directionMode = false;
+            this.directionAnchor = null;
         },
 
         highlightMove(move) {
             this.highlightedMove = move;
-            this.highlightedCells = [];
+            if (!move) {
+                this.highlightedCells = [];
+            } else {
+                const dr = move.direction === 'down' ? 1 : 0;
+                const dc = move.direction === 'right' ? 1 : 0;
+                const cells = [];
+                for (let i = 0; i < move.word.length; i++) {
+                    cells.push({ row: move.start_row + i*dr, col: move.start_col + i*dc });
+                }
+                this.highlightedCells = cells;
+            }
+        },
+
+        resizeBoard() {
+            // Cancel any pending animation frame
+            if (this.resizeRAF) {
+                cancelAnimationFrame(this.resizeRAF);
+                this.resizeRAF = null;
+            }
+            this.resizeRAF = requestAnimationFrame(() => {
+                this.resizeRAF = null;
+                const boardWrapper = this.$refs.boardWrapper;
+                if (!boardWrapper) return;
+
+                // .board-wrapper defaults to `flex: 0 0 auto` (fixed-size,
+                // doesn't grow). Briefly flip on flex-grow so it fills
+                // exactly the space left over after the rack/buttons/
+                // results panel — letting the browser report that number
+                // beats hand-coding margin/padding guesses that can drift
+                // out of sync with the CSS and under-size the board.
+                boardWrapper.style.flex = '1 1 auto';
+                boardWrapper.style.width = '100%';
+                boardWrapper.style.height = '';
+
+                const availW = boardWrapper.clientWidth;
+                const availH = boardWrapper.clientHeight;
+
+                let size = Math.floor(Math.min(availW, availH));
+                size = Math.max(size, 60);
+
+                // Lock flex-grow back off so the explicit square size we
+                // just computed actually sticks (flex-grow would otherwise
+                // keep re-stretching the box to fill leftover space).
+                boardWrapper.style.flex = '0 0 auto';
+                boardWrapper.style.width = size + 'px';
+                boardWrapper.style.height = size + 'px';
+
+                // Scale letters/points to the board's *actual* rendered
+                // size instead of raw vw/vh. Raw viewport units don't know
+                // about the results panel eating into the available width,
+                // so cell text could be sized for a board far bigger than
+                // the one actually drawn — that mismatch is what made the
+                // bottom rows overflow their square and get clipped.
+                const table = boardWrapper.querySelector('#board');
+                const cellPx = table ? table.clientWidth / SIZE : size / SIZE;
+                boardWrapper.style.setProperty('--cell-size', cellPx + 'px');
+            });
         },
 
         saveGame() {
@@ -401,12 +439,8 @@ const app = createApp({
             if (saved) {
                 try {
                     const state = JSON.parse(saved);
-                    if (state.board && Array.isArray(state.board) && state.board.length === SIZE) {
-                        this.board = state.board;
-                    }
-                    if (state.rack && Array.isArray(state.rack)) {
-                        this.rack = state.rack.slice(0, 7);
-                    }
+                    if (state.board && Array.isArray(state.board) && state.board.length === SIZE) this.board = state.board;
+                    if (state.rack && Array.isArray(state.rack)) this.rack = state.rack.slice(0, 7);
                     if (state.bonusKey !== undefined) this.bonusKey = state.bonusKey;
                 } catch(e) {}
             }
@@ -421,25 +455,84 @@ const app = createApp({
             this.results = [];
             this.highlightedMove = null;
             this.highlightedCells = [];
+            this.ctxMenu = null;
         }
     },
     mounted() {
         this.loadGame();
+
         this.$nextTick(() => {
+            setTimeout(() => this.resizeBoard(), 50);
+            setTimeout(() => this.resizeBoard(), 300);
+            setTimeout(() => this.resizeBoard(), 800);
+        });
+
+        if (window.ResizeObserver) {
+            this.resizeObserver = new ResizeObserver(() => {
+                this.resizeBoard();
+            });
+            const leftPanel = this.$refs.leftPanel;
+            if (leftPanel) {
+                this.resizeObserver.observe(leftPanel);
+            }
+        }
+
+        window.addEventListener('resize', this.resizeBoard);
+        window.addEventListener('orientationchange', () => {
+            setTimeout(this.resizeBoard, 200);
+        });
+
+        this.triggerSolve();
+
+        watch(() => this.board, () => {
+            this.highlightedCells = [];
+            this.saveGame();
+            this.triggerSolve();
+        }, { deep: true });
+
+        watch(() => this.rack, () => {
+            this.highlightedCells = [];
+            this.saveGame();
+            this.triggerSolve();
+            this.$nextTick(this.resizeBoard);
+        }, { deep: true });
+
+        watch(() => this.bonusKey, () => {
+            this.highlightedCells = [];
+            this.saveGame();
             this.triggerSolve();
         });
 
-        watch(() => this.board, this.saveGame, { deep: true });
-        watch(() => this.rack, this.saveGame, { deep: true });
-        watch(() => this.bonusKey, this.saveGame);
-
-        watch(() => this.board, () => { this.highlightedCells = []; this.triggerSolve(); }, { deep: true });
-        watch(() => this.rack, () => { this.highlightedCells = []; this.triggerSolve(); }, { deep: true });
-        watch(() => this.bonusKey, () => { this.highlightedCells = []; this.triggerSolve(); });
+        watch(() => this.results, () => {
+            // Results changed – resize after the DOM updates
+            this.$nextTick(() => {
+                setTimeout(this.resizeBoard, 50);
+            });
+        });
 
         document.addEventListener('click', (e) => {
             if (this.ctxMenu && !e.target.closest('.context-menu')) this.ctxMenu = null;
         });
+
+        this.$nextTick(() => {
+            this.focusBoardInput();
+        });
+    },
+    unmounted() {
+        window.removeEventListener('resize', this.resizeBoard);
+        window.removeEventListener('orientationchange', this.resizeBoard);
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+            this.resizeObserver = null;
+        }
+        if (this.resizeRAF) {
+            cancelAnimationFrame(this.resizeRAF);
+            this.resizeRAF = null;
+        }
+        if (solveTimer) {
+            clearTimeout(solveTimer);
+            solveTimer = null;
+        }
     }
 });
 
