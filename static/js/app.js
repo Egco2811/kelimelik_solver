@@ -26,8 +26,8 @@ function setPremium(r,c,type) {
 }
 setPremium(1,3,'tw'); setPremium(3,1,'tw');
 setPremium(2,2,'tl'); setPremium(5,5,'tl');
-setPremium(1,6,'tl'); setPremium(6,1,'dl');
-setPremium(2,7,'tl'); setPremium(7,2,'dl');
+setPremium(1,6,'dl'); setPremium(6,1,'dl');
+setPremium(2,7,'dl'); setPremium(7,2,'dl');
 setPremium(6,6,'dl'); setPremium(7,7,'dl');
 setPremium(8,3,'dw'); setPremium(3,8,'dw');
 setPremium(4,4,'dw');
@@ -365,23 +365,39 @@ const app = createApp({
         },
 
         resizeBoard() {
-            if (window.innerWidth <= 768) return;
+        if (window.innerWidth <= 768) return;
             const leftPanel = this.$el?.querySelector('.left-panel');
+        if (window.innerWidth <= 768) return;
             const boardWrapper = this.$el?.querySelector('.board-wrapper');
+        if (window.innerWidth <= 768) return;
             if (!leftPanel || !boardWrapper) return;
+        if (window.innerWidth <= 768) return;
             const panelWidth = leftPanel.clientWidth;
+        if (window.innerWidth <= 768) return;
             const panelHeight = leftPanel.clientHeight;
+        if (window.innerWidth <= 768) return;
             const rack = this.$el?.querySelector('.rack-section');
+        if (window.innerWidth <= 768) return;
             const buttons = this.$el?.querySelector('.button-row');
+        if (window.innerWidth <= 768) return;
             const rackH = rack ? rack.offsetHeight : 0;
+        if (window.innerWidth <= 768) return;
             const btnH = buttons ? buttons.offsetHeight : 0;
+        if (window.innerWidth <= 768) return;
             const usedHeight = rackH + btnH + 16;
+        if (window.innerWidth <= 768) return;
             let availableHeight = panelHeight - usedHeight;
+        if (window.innerWidth <= 768) return;
             if (availableHeight < 100) availableHeight = 100;
+        if (window.innerWidth <= 768) return;
             const size = Math.min(panelWidth, availableHeight);
+        if (window.innerWidth <= 768) return;
             boardWrapper.style.width = size + 'px';
+        if (window.innerWidth <= 768) return;
             boardWrapper.style.height = size + 'px';
+        if (window.innerWidth <= 768) return;
             boardWrapper.style.maxWidth = size + 'px';
+        if (window.innerWidth <= 768) return;
             boardWrapper.style.maxHeight = size + 'px';
         },
 

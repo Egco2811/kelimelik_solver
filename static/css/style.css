@@ -25,7 +25,7 @@ body {
     height: 100vh;
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    overflow: hidden;
 }
 h1 {
     font-weight: 700;
@@ -43,7 +43,7 @@ h1 {
     display: flex;
     flex-wrap: wrap;
     gap: 1rem;
-    overflow: visible;
+    overflow: hidden;
 }
 
 .left-panel {
@@ -53,7 +53,7 @@ h1 {
     flex-direction: column;
     align-items: center;
     min-height: 0;
-    flex-shrink: 0;
+    overflow: hidden;
 }
 
 .board-wrapper {
@@ -66,8 +66,12 @@ h1 {
     align-items: center;
     justify-content: center;
     margin: 0 auto;
-    flex-shrink: 0;
+    flex-shrink: 1;
     overflow: hidden;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    max-width: 100%;
+    max-height: calc(100vh - 11rem);
 }
 table#board {
     border-collapse: collapse;
@@ -325,24 +329,32 @@ td.new-tile {
 }
 
 @media (max-width: 768px) {
+    body {
+        overflow-y: auto;
+        height: auto;
+    }
+    .game-container {
+        height: auto;
+        min-height: 100vh;
+        overflow: visible;
+    }
     .main-row {
         flex-direction: column;
+        flex-wrap: nowrap;
     }
     .left-panel {
         flex: 0 0 auto;
-        overflow-y: visible;
-        max-height: none;
+        overflow: visible;
     }
     .board-wrapper {
-        width: 100% !important;
-        height: auto !important;
+        max-height: 50vh;
+        width: 100%;
+        height: auto;
         aspect-ratio: 1 / 1;
-        max-width: 100%;
-        max-height: 60vh;
     }
     .results-panel {
         flex: 1 1 auto;
         max-height: none;
-        min-height: 200px;
+        width: 100%;
     }
 }
