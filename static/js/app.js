@@ -1,3 +1,6 @@
+// ============================================================
+//  CONSTANTS
+// ============================================================
 const { createApp, ref, reactive } = Vue;
 
 const SIZE = 15;
@@ -41,6 +44,9 @@ const bonusStarSVG = `<svg viewBox="0 0 100 100" style="width:100%;height:100%;"
     <use href="#bstar" transform="translate(45,50) scale(0.5)"/>
 </svg>`;
 
+// ============================================================
+//  VUE APP
+// ============================================================
 const app = createApp({
     data() {
         return {
