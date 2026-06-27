@@ -1,17 +1,19 @@
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700&display=swap');
 
-/* ---------- General ---------- */
+* { box-sizing: border-box; }
+
 body {
     background: linear-gradient(135deg, #3e3a39 0%, #2b2a27 100%);
-    min-height: 100vh;
+    margin: 0;
+    height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
-    margin: 0;
     font-family: 'Segoe UI', Tahoma, sans-serif;
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
+    overflow: hidden;
 }
 .game-container {
     background: #1e1b18;
@@ -20,32 +22,52 @@ body {
     box-shadow: 0 20px 50px rgba(0,0,0,0.7);
     width: 100%;
     max-width: 100vw;
-    box-sizing: border-box;
-    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
 }
 h1 {
     font-weight: 700;
     color: #f1d5a5;
     text-shadow: 2px 2px 4px #000;
     letter-spacing: 2px;
-    margin-bottom: 0.5rem;
+    margin: 0 0 0.5rem 0;
+    flex-shrink: 0;
 }
 [v-cloak] { display: none !important; }
 
-/* ---------- Board ---------- */
+.main-row {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    overflow: visible;
+}
+
+.left-panel {
+    flex: 1 1 300px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 0;
+    flex-shrink: 0;
+}
+
 .board-wrapper {
     background: #4a3f35;
     border: 4px solid #8b7355;
     border-radius: 16px;
     padding: 12px;
     box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
-    width: 100%;
-    aspect-ratio: 1 / 1;
-    box-sizing: border-box;
-    margin: 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
+    margin: 0 auto;
+    flex-shrink: 0;
+    overflow: hidden;
 }
 table#board {
     border-collapse: collapse;
@@ -77,19 +99,14 @@ td.dl { background: #98bac5; color: white; }
 td.star { background: #f3d386; }
 td.bonus { background: #f3d386; }
 
-/* Tile when letter is placed */
 td.has-letter {
     background: #ecc426 !important;
     color: #84553f !important;
 }
-.tile-letter {
-    position: relative;
-    z-index: 1;
-}
+.tile-letter { position: relative; z-index: 1; }
 .tile-point {
     position: absolute;
-    top: 2px;
-    right: 2px;
+    top: 2px; right: 2px;
     font-size: 0.45em;
     font-weight: 700;
     color: #84553f;
@@ -97,21 +114,18 @@ td.has-letter {
     z-index: 0;
 }
 
-/* Premium overlays (empty premium cells) */
 .premium-text {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
-    height: 100%;
+    width: 100%; height: 100%;
     z-index: 1;
 }
 td.star .premium-text,
 td.bonus .premium-text {
     position: absolute;
     top: 0; left: 0;
-    width: 100%;
-    height: 100%;
+    width: 100%; height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -122,10 +136,7 @@ td.bonus .premium-text {
     display: inline-block;
     font-weight: 800;
 }
-.mult-letter {
-    font-size: 1.2em;
-    line-height: 1;
-}
+.mult-letter { font-size: 1.2em; line-height: 1; }
 .multiplier-label sup {
     position: absolute;
     top: -0.2em;
@@ -134,29 +145,23 @@ td.bonus .premium-text {
     line-height: 1;
 }
 
-/* Cursor – always on top */
 td.cursor {
     box-shadow: inset 0 0 0 3px #ff8800, 0 0 8px #ff8800;
     z-index: 10;
 }
 
-/* Direction arrow */
 .next-arrow {
     font-size: 1.2em;
     color: rgba(0,0,0,0.25);
     font-weight: bold;
     pointer-events: none;
     position: absolute;
-    top: 50%;
-    left: 50%;
+    top: 50%; left: 50%;
     transform: translate(-50%, -50%);
     z-index: 0;
 }
-td.next-cell {
-    background: #f9f0e0;
-}
+td.next-cell { background: #f9f0e0; }
 
-/* Highlighted move & new tile */
 td.highlight-cell {
     outline: 3px solid #00ff88;
     outline-offset: -3px;
@@ -168,8 +173,11 @@ td.new-tile {
     box-shadow: inset 0 0 8px #00aaff;
 }
 
-/* ---------- Rack ---------- */
-.rack-section { margin-top: 1rem; }
+.rack-section {
+    flex-shrink: 0;
+    margin-top: 0.5rem;
+    width: 100%;
+}
 .rack-label {
     color: #c4a87c;
     font-size: 1.2rem;
@@ -219,7 +227,12 @@ td.new-tile {
 }
 .rack-tile .point { font-size: 11px; color: #5c4a3a; }
 
-/* ---------- Buttons ---------- */
+.button-row {
+    flex-shrink: 0;
+    margin-top: 0.5rem;
+    text-align: center;
+    width: 100%;
+}
 .btn-wood {
     background: #8b7355;
     color: white;
@@ -230,22 +243,18 @@ td.new-tile {
     cursor: pointer;
     transition: 0.2s;
     font-size: 1rem;
-    margin-top: 1rem;
-    position: relative;
 }
 .btn-wood:hover { background: #6b553f; color: #f1d5a5; }
 .btn-wood:disabled { opacity: 0.7; cursor: not-allowed; }
 .me-2 { margin-right: 0.5rem; }
 
-/* Spinner for solver */
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
 .spinner {
     display: inline-block;
-    width: 1em;
-    height: 1em;
+    width: 1em; height: 1em;
     border: 2px solid rgba(255,255,255,0.3);
     border-radius: 50%;
     border-top-color: #fff;
@@ -254,7 +263,6 @@ td.new-tile {
     vertical-align: middle;
 }
 
-/* ---------- Context Menu ---------- */
 .context-menu {
     position: fixed;
     background: #2c2c2c;
@@ -274,15 +282,26 @@ td.new-tile {
 .context-item:hover { background: #4a3f35; }
 .context-item:last-child { border-bottom: none; }
 
-/* ---------- Results Panel ---------- */
-.results-container {
+.results-panel {
+    flex: 0 0 280px;
+    display: flex;
+    flex-direction: column;
     background: #2c2c2c;
     border-radius: 12px;
     padding: 1rem;
-    max-height: 300px;
-    overflow-y: auto;
-    text-align: left;
+    overflow: hidden;
+    max-height: 100%;
 }
+.results-panel h3 {
+    color: #e0d6c8;
+    margin: 0 0 0.5rem 0;
+}
+.results-scroll {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+}
+
 .result-item {
     background: #3a3a3a;
     border-radius: 8px;
@@ -295,7 +314,6 @@ td.new-tile {
 .result-item:hover { background: #4a4a4a; }
 .result-item .badge { font-size: 1rem; }
 
-/* ---------- Hidden Inputs ---------- */
 .hidden-input {
     position: absolute;
     width: 1px; height: 1px;
@@ -304,4 +322,27 @@ td.new-tile {
     outline: none;
     background: transparent;
     pointer-events: none;
+}
+
+@media (max-width: 768px) {
+    .main-row {
+        flex-direction: column;
+    }
+    .left-panel {
+        flex: 0 0 auto;
+        overflow-y: visible;
+        max-height: none;
+    }
+    .board-wrapper {
+        width: 100% !important;
+        height: auto !important;
+        aspect-ratio: 1 / 1;
+        max-width: 100%;
+        max-height: 60vh;
+    }
+    .results-panel {
+        flex: 1 1 auto;
+        max-height: none;
+        min-height: 200px;
+    }
 }

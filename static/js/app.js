@@ -1,4 +1,4 @@
-const { createApp, ref, reactive, watch } = Vue;
+const { createApp, ref, reactive, watch, nextTick } = Vue;
 
 const SIZE = 15;
 const POINTS = {
@@ -143,10 +143,8 @@ const app = createApp({
             if (this.directionMode && this.directionAnchor &&
                 this.directionAnchor.row === r && this.directionAnchor.col === c) {
                 if (this.directionPos === 0) {
-                    // Toggle orientation only if no letters typed yet
                     this.directionOrientation = this.directionOrientation === 'right' ? 'down' : 'right';
                 } else {
-                    // Already typing, exit direction mode
                     this.directionMode = false;
                     this.directionAnchor = null;
                 }
@@ -212,23 +210,19 @@ const app = createApp({
         },
         onKey(e) {
             const key = e.key;
-
             if (this.directionMode && this.directionAnchor) {
-                // Arrow keys: move anchor in that direction (preserve direction mode)
                 if (key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight') {
                     e.preventDefault();
-                    let newRow = this.cursor.row;
-                    let newCol = this.cursor.col;
+                    let newRow = this.cursor.row, newCol = this.cursor.col;
                     if (key === 'ArrowUp') newRow = Math.max(1, this.cursor.row - 1);
                     else if (key === 'ArrowDown') newRow = Math.min(SIZE, this.cursor.row + 1);
                     else if (key === 'ArrowLeft') newCol = Math.max(1, this.cursor.col - 1);
                     else if (key === 'ArrowRight') newCol = Math.min(SIZE, this.cursor.col + 1);
                     this.directionAnchor = { row: newRow, col: newCol };
                     this.cursor = { row: newRow, col: newCol };
-                    this.directionPos = 0;  // reset typing offset
+                    this.directionPos = 0;
                     return;
                 }
-                // Enter: toggle orientation (only if no letters typed yet)
                 if (key === 'Enter') {
                     e.preventDefault();
                     if (this.directionPos === 0) {
@@ -236,14 +230,12 @@ const app = createApp({
                     }
                     return;
                 }
-                // Escape: exit direction mode
                 if (key === 'Escape') {
                     e.preventDefault();
                     this.directionMode = false;
                     this.directionAnchor = null;
                     return;
                 }
-                // Space
                 if (key === ' ') {
                     e.preventDefault();
                     const nxt = this.directionPos + 1;
@@ -254,7 +246,6 @@ const app = createApp({
                     }
                     return;
                 }
-                // Backspace/Delete
                 if (key === 'Backspace' || key === 'Delete') {
                     e.preventDefault();
                     if (this.directionPos > 0) {
@@ -272,7 +263,6 @@ const app = createApp({
                     }
                     return;
                 }
-                // Letter
                 if (key.length === 1) {
                     const letter = turkishUpper(key);
                     if (letter in POINTS) {
@@ -288,7 +278,6 @@ const app = createApp({
                 return;
             }
 
-            // Normal mode (no direction)
             if (key.startsWith('Arrow')) {
                 e.preventDefault();
                 if (key === 'ArrowUp' && this.cursor.row>1) this.cursor.row--;
@@ -325,17 +314,11 @@ const app = createApp({
 
         triggerSolve() {
             if (solveTimer) clearTimeout(solveTimer);
-            solveTimer = setTimeout(() => {
-                this.solveBoard();
-            }, 400);
+            solveTimer = setTimeout(() => { this.solveBoard(); }, 400);
         },
 
         async solveBoard() {
-            if (this.rack.length === 0) {
-                this.results = [];
-                this.highlightedMove = null;
-                return;
-            }
+            if (this.rack.length === 0) { this.results = []; this.highlightedMove = null; return; }
             this.solving = true;
             const payload = {
                 board: this.board,
@@ -351,16 +334,9 @@ const app = createApp({
                 if (!res.ok) throw new Error('Sunucu hatası');
                 const data = await res.json();
                 this.results = data;
-                if (data.length > 0) {
-                    this.highlightedMove = data[0];
-                } else {
-                    this.highlightedMove = null;
-                }
-            } catch (err) {
-                console.error('Çözüm alınamadı:', err);
-            } finally {
-                this.solving = false;
-            }
+                this.highlightedMove = data.length > 0 ? data[0] : null;
+            } catch (err) { console.error('Çözüm alınamadı:', err); }
+            finally { this.solving = false; }
         },
 
         applyMove(move) {
@@ -371,16 +347,12 @@ const app = createApp({
             for (let i = 0; i < move.word.length; i++) {
                 const r = move.start_row + i*dr;
                 const c = move.start_col + i*dc;
-                if (!oldBoard[r-1][c-1]) {
-                    newCells.push({ row: r, col: c });
-                }
+                if (!oldBoard[r-1][c-1]) newCells.push({ row: r, col: c });
                 this.board[r-1][c-1] = move.word[i];
             }
             for (const lt of move.rack_used) {
                 const idx = this.rack.indexOf(lt);
-                if (idx !== -1) {
-                    this.rack.splice(idx, 1);
-                }
+                if (idx !== -1) this.rack.splice(idx, 1);
             }
             this.highlightedCells = newCells;
             this.highlightedMove = move;
@@ -392,6 +364,27 @@ const app = createApp({
             this.highlightedCells = [];
         },
 
+        resizeBoard() {
+            if (window.innerWidth <= 768) return;
+            const leftPanel = this.$el?.querySelector('.left-panel');
+            const boardWrapper = this.$el?.querySelector('.board-wrapper');
+            if (!leftPanel || !boardWrapper) return;
+            const panelWidth = leftPanel.clientWidth;
+            const panelHeight = leftPanel.clientHeight;
+            const rack = this.$el?.querySelector('.rack-section');
+            const buttons = this.$el?.querySelector('.button-row');
+            const rackH = rack ? rack.offsetHeight : 0;
+            const btnH = buttons ? buttons.offsetHeight : 0;
+            const usedHeight = rackH + btnH + 16;
+            let availableHeight = panelHeight - usedHeight;
+            if (availableHeight < 100) availableHeight = 100;
+            const size = Math.min(panelWidth, availableHeight);
+            boardWrapper.style.width = size + 'px';
+            boardWrapper.style.height = size + 'px';
+            boardWrapper.style.maxWidth = size + 'px';
+            boardWrapper.style.maxHeight = size + 'px';
+        },
+
         saveGame() {
             const state = { board: this.board, rack: this.rack, bonusKey: this.bonusKey };
             setCookie('kelimelik_save', JSON.stringify(state));
@@ -401,12 +394,8 @@ const app = createApp({
             if (saved) {
                 try {
                     const state = JSON.parse(saved);
-                    if (state.board && Array.isArray(state.board) && state.board.length === SIZE) {
-                        this.board = state.board;
-                    }
-                    if (state.rack && Array.isArray(state.rack)) {
-                        this.rack = state.rack.slice(0, 7);
-                    }
+                    if (state.board && Array.isArray(state.board) && state.board.length === SIZE) this.board = state.board;
+                    if (state.rack && Array.isArray(state.rack)) this.rack = state.rack.slice(0, 7);
                     if (state.bonusKey !== undefined) this.bonusKey = state.bonusKey;
                 } catch(e) {}
             }
@@ -426,20 +415,32 @@ const app = createApp({
     mounted() {
         this.loadGame();
         this.$nextTick(() => {
+            setTimeout(() => this.resizeBoard(), 100);
+            setTimeout(() => this.resizeBoard(), 500);
+            window.addEventListener('resize', this.resizeBoard);
+            window.addEventListener('orientationchange', () => setTimeout(this.resizeBoard, 100));
+            const leftPanel = this.$el?.querySelector('.left-panel');
+            if (leftPanel) {
+                const ro = new ResizeObserver(() => this.resizeBoard());
+                ro.observe(leftPanel);
+            }
             this.triggerSolve();
         });
-
         watch(() => this.board, this.saveGame, { deep: true });
         watch(() => this.rack, this.saveGame, { deep: true });
         watch(() => this.bonusKey, this.saveGame);
-
         watch(() => this.board, () => { this.highlightedCells = []; this.triggerSolve(); }, { deep: true });
         watch(() => this.rack, () => { this.highlightedCells = []; this.triggerSolve(); }, { deep: true });
         watch(() => this.bonusKey, () => { this.highlightedCells = []; this.triggerSolve(); });
-
+        watch(() => this.rack, () => this.$nextTick(this.resizeBoard));
+        watch(() => this.results, () => this.$nextTick(this.resizeBoard));
         document.addEventListener('click', (e) => {
             if (this.ctxMenu && !e.target.closest('.context-menu')) this.ctxMenu = null;
         });
+    },
+    unmounted() {
+        window.removeEventListener('resize', this.resizeBoard);
+        window.removeEventListener('orientationchange', this.resizeBoard);
     }
 });
 
