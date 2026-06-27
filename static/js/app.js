@@ -85,6 +85,7 @@ const app = createApp({
             highlightedCells: [],
 
             resizeObserver: null,
+            resizeRAF: null,
         };
     },
     methods: {
@@ -384,32 +385,49 @@ const app = createApp({
         },
 
         resizeBoard() {
-            const boardWrapper = this.$refs.boardWrapper;
-            const leftPanel = this.$refs.leftPanel;
-            const rack = this.$el?.querySelector('.rack-section');
-            const buttons = this.$el?.querySelector('.button-row');
+            // Cancel any pending animation frame
+            if (this.resizeRAF) {
+                cancelAnimationFrame(this.resizeRAF);
+                this.resizeRAF = null;
+            }
+            this.resizeRAF = requestAnimationFrame(() => {
+                this.resizeRAF = null;
+                const boardWrapper = this.$refs.boardWrapper;
+                if (!boardWrapper) return;
 
-            if (!boardWrapper || !leftPanel) return;
+                // .board-wrapper defaults to `flex: 0 0 auto` (fixed-size,
+                // doesn't grow). Briefly flip on flex-grow so it fills
+                // exactly the space left over after the rack/buttons/
+                // results panel — letting the browser report that number
+                // beats hand-coding margin/padding guesses that can drift
+                // out of sync with the CSS and under-size the board.
+                boardWrapper.style.flex = '1 1 auto';
+                boardWrapper.style.width = '100%';
+                boardWrapper.style.height = '';
 
-            const panelWidth = leftPanel.clientWidth;
-            const panelHeight = leftPanel.clientHeight;
+                const availW = boardWrapper.clientWidth;
+                const availH = boardWrapper.clientHeight;
 
-            const rackH = rack ? rack.offsetHeight : 0;
-            const btnH = buttons ? buttons.offsetHeight : 0;
-            const gap = 12;
-            const padding = 16;
-            const usedHeight = rackH + btnH + gap * 2 + padding;
+                let size = Math.floor(Math.min(availW, availH));
+                size = Math.max(size, 60);
 
-            let availableHeight = panelHeight - usedHeight;
-            if (availableHeight < 60) availableHeight = 60;
+                // Lock flex-grow back off so the explicit square size we
+                // just computed actually sticks (flex-grow would otherwise
+                // keep re-stretching the box to fill leftover space).
+                boardWrapper.style.flex = '0 0 auto';
+                boardWrapper.style.width = size + 'px';
+                boardWrapper.style.height = size + 'px';
 
-            let size = Math.min(panelWidth - 8, availableHeight);
-            size = Math.max(size, 60);
-
-            boardWrapper.style.width = size + 'px';
-            boardWrapper.style.height = size + 'px';
-            boardWrapper.style.maxWidth = size + 'px';
-            boardWrapper.style.maxHeight = size + 'px';
+                // Scale letters/points to the board's *actual* rendered
+                // size instead of raw vw/vh. Raw viewport units don't know
+                // about the results panel eating into the available width,
+                // so cell text could be sized for a board far bigger than
+                // the one actually drawn — that mismatch is what made the
+                // bottom rows overflow their square and get clipped.
+                const table = boardWrapper.querySelector('#board');
+                const cellPx = table ? table.clientWidth / SIZE : size / SIZE;
+                boardWrapper.style.setProperty('--cell-size', cellPx + 'px');
+            });
         },
 
         saveGame() {
@@ -486,7 +504,10 @@ const app = createApp({
         });
 
         watch(() => this.results, () => {
-            this.$nextTick(this.resizeBoard);
+            // Results changed – resize after the DOM updates
+            this.$nextTick(() => {
+                setTimeout(this.resizeBoard, 50);
+            });
         });
 
         document.addEventListener('click', (e) => {
@@ -503,6 +524,10 @@ const app = createApp({
         if (this.resizeObserver) {
             this.resizeObserver.disconnect();
             this.resizeObserver = null;
+        }
+        if (this.resizeRAF) {
+            cancelAnimationFrame(this.resizeRAF);
+            this.resizeRAF = null;
         }
         if (solveTimer) {
             clearTimeout(solveTimer);
