@@ -7,6 +7,17 @@ const POINTS = {
     'P':5,'R':1,'S':2,'Ş':3,'T':1,'U':2,'Ü':5,'V':4,'Y':4,'Z':4
 };
 
+// Turkish‑aware uppercase
+const LOWER_TO_UPPER = {
+    'a':'A','b':'B','c':'C','ç':'Ç','d':'D','e':'E','f':'F','g':'G',
+    'ğ':'Ğ','h':'H','ı':'I','i':'İ','j':'J','k':'K','l':'L','m':'M',
+    'n':'N','o':'O','ö':'Ö','p':'P','r':'R','s':'S','ş':'Ş','t':'T',
+    'u':'U','ü':'Ü','v':'V','y':'Y','z':'Z'
+};
+function turkishUpper(str) {
+    return str.split('').map(c => LOWER_TO_UPPER[c] || c.toUpperCase()).join('');
+}
+
 const premiumGrid = Array(SIZE).fill().map(() => Array(SIZE).fill(''));
 function setPremium(r,c,type) {
     premiumGrid[r-1][c-1] = type;
@@ -64,9 +75,9 @@ const app = createApp({
             directionOrientation: 'right',
             directionPos: 0,
 
-            // long press handling
             longPressTimer: null,
-            longPressCell: null
+            longPressCell: null,
+            ignoreNextClick: false
         };
     },
     methods: {
@@ -104,7 +115,6 @@ const app = createApp({
             return nr === r && nc === c;
         },
         clickCell(r,c) {
-            // If a long press just happened, ignore the click
             if (this.ignoreNextClick) {
                 this.ignoreNextClick = false;
                 return;
@@ -126,25 +136,22 @@ const app = createApp({
             this.cursor = { row: r, col: c };
             this.focusBoardInput();
         },
-        // Right-click (desktop) and long-press (mobile) handler
         rightClick(r,c,event) {
             if (event) event.preventDefault();
             this.ctxMenu = { r, c, x: (event ? event.clientX : 0), y: (event ? event.clientY : 0) };
-            // On mobile, event might be undefined, so set position via touch
             if (event && event.touches) {
                 this.ctxMenu.x = event.touches[0].clientX;
                 this.ctxMenu.y = event.touches[0].clientY;
             }
         },
-        // Touch events for long press
         handleTouchStart(r,c, event) {
             this.ignoreNextClick = false;
             this.longPressCell = { r, c };
             this.longPressTimer = setTimeout(() => {
                 this.longPressTimer = null;
-                this.ignoreNextClick = true;   // prevent click after long press
+                this.ignoreNextClick = true;
                 this.rightClick(r, c, event);
-            }, 500); // 500ms
+            }, 500);
         },
         handleTouchMove() {
             if (this.longPressTimer) {
@@ -157,7 +164,6 @@ const app = createApp({
             if (this.longPressTimer) {
                 clearTimeout(this.longPressTimer);
                 this.longPressTimer = null;
-                // If timer cleared, it's a short tap – will be handled by clickCell
             }
         },
         toggleBonus() {
@@ -214,14 +220,16 @@ const app = createApp({
                         }
                     }
                     return;
-                } else if (key.length === 1 && key.toUpperCase() in POINTS) {
-                    e.preventDefault();
-                    const letter = key.toUpperCase();
-                    const cell = this.getCellAt(this.directionPos);
-                    if (cell.row<1||cell.row>SIZE||cell.col<1||cell.col>SIZE) return;
-                    this.board[cell.row-1][cell.col-1] = letter;
-                    this.cursor = {row:cell.row, col:cell.col};
-                    this.directionPos++;
+                } else if (key.length === 1) {
+                    const letter = turkishUpper(key);
+                    if (letter in POINTS) {
+                        e.preventDefault();
+                        const cell = this.getCellAt(this.directionPos);
+                        if (cell.row<1||cell.row>SIZE||cell.col<1||cell.col>SIZE) return;
+                        this.board[cell.row-1][cell.col-1] = letter;
+                        this.cursor = {row:cell.row, col:cell.col};
+                        this.directionPos++;
+                    }
                     return;
                 } else if (key === 'Escape') {
                     this.directionMode = false;
@@ -240,9 +248,12 @@ const app = createApp({
             } else if (key === 'Backspace' || key === 'Delete') {
                 e.preventDefault();
                 this.clearCell(this.cursor.row, this.cursor.col);
-            } else if (key.length === 1 && key.toUpperCase() in POINTS) {
-                e.preventDefault();
-                this.board[this.cursor.row-1][this.cursor.col-1] = key.toUpperCase();
+            } else if (key.length === 1) {
+                const letter = turkishUpper(key);
+                if (letter in POINTS) {
+                    e.preventDefault();
+                    this.board[this.cursor.row-1][this.cursor.col-1] = letter;
+                }
             }
         },
         onRackKey(e) {
@@ -250,9 +261,12 @@ const app = createApp({
             if (key === 'Backspace' || key === 'Delete') {
                 e.preventDefault();
                 if (this.rack.length > 0) this.rack.pop();
-            } else if (key.length === 1 && key.toUpperCase() in POINTS) {
-                e.preventDefault();
-                if (this.rack.length < 7) this.rack.push(key.toUpperCase());
+            } else if (key.length === 1) {
+                const letter = turkishUpper(key);
+                if (letter in POINTS) {
+                    e.preventDefault();
+                    if (this.rack.length < 7) this.rack.push(letter);
+                }
             }
         },
 
@@ -260,7 +274,6 @@ const app = createApp({
         onBoardInputBlur() {},
         focusRackInput() { this.$refs.rackInput?.focus(); },
 
-        // Save & Load
         saveGame() {
             const state = { board: this.board, rack: this.rack, bonusKey: this.bonusKey };
             setCookie('kelimelik_save', JSON.stringify(state));
