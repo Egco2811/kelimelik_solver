@@ -2,10 +2,20 @@ const { createApp, ref, reactive, watch } = Vue;
 
 const SIZE = 15;
 const POINTS = {
-    'A':1,'B':3,'C':3,'Ç':3,'D':3,'E':1,'F':7,'G':5,'Ğ':8,'H':4,
-    'I':2,'İ':1,'J':10,'K':1,'L':1,'M':2,'N':1,'O':2,'Ö':5,
-    'P':5,'R':1,'S':2,'Ş':3,'T':1,'U':2,'Ü':5,'V':4,'Y':4,'Z':4
+    'A':1,'B':3,'C':4,'Ç':4,'D':3,'E':1,'F':7,'G':5,'Ğ':8,'H':5,
+    'I':1,'İ':2,'J':10,'K':1,'L':1,'M':2,'N':1,'O':2,'Ö':7,
+    'P':5,'R':1,'S':2,'Ş':4,'T':1,'U':2,'Ü':3,'V':7,'Y':3,'Z':4
 };
+
+const LOWER_TO_UPPER = {
+    'a':'A','b':'B','c':'C','ç':'Ç','d':'D','e':'E','f':'F','g':'G',
+    'ğ':'Ğ','h':'H','ı':'I','i':'İ','j':'J','k':'K','l':'L','m':'M',
+    'n':'N','o':'O','ö':'Ö','p':'P','r':'R','s':'S','ş':'Ş','t':'T',
+    'u':'U','ü':'Ü','v':'V','y':'Y','z':'Z'
+};
+function turkishUpper(str) {
+    return str.split('').map(c => LOWER_TO_UPPER[c] || c.toUpperCase()).join('');
+}
 
 const premiumGrid = Array(SIZE).fill().map(() => Array(SIZE).fill(''));
 function setPremium(r,c,type) {
@@ -37,7 +47,6 @@ const bonusStarSVG = `<svg viewBox="0 0 100 100" style="width:100%;height:100%;"
     <use href="#bstar" transform="translate(45,50) scale(0.5)"/>
 </svg>`;
 
-// Cookie helpers
 function setCookie(name, value, days=365) {
     const d = new Date();
     d.setTime(d.getTime() + (days*24*60*60*1000));
@@ -47,6 +56,8 @@ function getCookie(name) {
     const c = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
     return c ? decodeURIComponent(c[2]) : null;
 }
+
+let solveTimer = null;
 
 const app = createApp({
     data() {
@@ -64,9 +75,14 @@ const app = createApp({
             directionOrientation: 'right',
             directionPos: 0,
 
-            // long press handling
             longPressTimer: null,
-            longPressCell: null
+            longPressCell: null,
+            ignoreNextClick: false,
+
+            solving: false,
+            results: [],
+            highlightedMove: null,
+            highlightedCells: []
         };
     },
     methods: {
@@ -81,9 +97,25 @@ const app = createApp({
             const classes = [];
             if (premium) classes.push(premium);
             else classes.push('empty');
+            if (this.board[r-1][c-1]) classes.push('has-letter');
             if (this.cursor.row === r && this.cursor.col === c) classes.push('cursor');
             if (this.isNextCell(r,c) && !this.board[r-1][c-1]) classes.push('next-cell');
+            if (this.isHighlighted(r,c)) classes.push('highlight-cell');
+            if (this.isNewTile(r,c)) classes.push('new-tile');
             return classes;
+        },
+        isHighlighted(r,c) {
+            if (!this.highlightedMove) return false;
+            const m = this.highlightedMove;
+            const dr = m.direction === 'down' ? 1 : 0;
+            const dc = m.direction === 'right' ? 1 : 0;
+            for (let i = 0; i < m.word.length; i++) {
+                if (m.start_row + i*dr === r && m.start_col + i*dc === c) return true;
+            }
+            return false;
+        },
+        isNewTile(r,c) {
+            return this.highlightedCells.some(cell => cell.row === r && cell.col === c);
         },
         premiumLabel(r,c) {
             const premium = this.premiumType(r,c);
@@ -104,7 +136,6 @@ const app = createApp({
             return nr === r && nc === c;
         },
         clickCell(r,c) {
-            // If a long press just happened, ignore the click
             if (this.ignoreNextClick) {
                 this.ignoreNextClick = false;
                 return;
@@ -112,8 +143,10 @@ const app = createApp({
             if (this.directionMode && this.directionAnchor &&
                 this.directionAnchor.row === r && this.directionAnchor.col === c) {
                 if (this.directionPos === 0) {
+                    // Toggle orientation only if no letters typed yet
                     this.directionOrientation = this.directionOrientation === 'right' ? 'down' : 'right';
                 } else {
+                    // Already typing, exit direction mode
                     this.directionMode = false;
                     this.directionAnchor = null;
                 }
@@ -126,25 +159,22 @@ const app = createApp({
             this.cursor = { row: r, col: c };
             this.focusBoardInput();
         },
-        // Right-click (desktop) and long-press (mobile) handler
         rightClick(r,c,event) {
             if (event) event.preventDefault();
-            this.ctxMenu = { r, c, x: (event ? event.clientX : 0), y: (event ? event.clientY : 0) };
-            // On mobile, event might be undefined, so set position via touch
+            this.ctxMenu = { r, c, x: event ? event.clientX : 0, y: event ? event.clientY : 0 };
             if (event && event.touches) {
                 this.ctxMenu.x = event.touches[0].clientX;
                 this.ctxMenu.y = event.touches[0].clientY;
             }
         },
-        // Touch events for long press
-        handleTouchStart(r,c, event) {
+        handleTouchStart(r,c,event) {
             this.ignoreNextClick = false;
             this.longPressCell = { r, c };
             this.longPressTimer = setTimeout(() => {
                 this.longPressTimer = null;
-                this.ignoreNextClick = true;   // prevent click after long press
+                this.ignoreNextClick = true;
                 this.rightClick(r, c, event);
-            }, 500); // 500ms
+            }, 500);
         },
         handleTouchMove() {
             if (this.longPressTimer) {
@@ -157,7 +187,6 @@ const app = createApp({
             if (this.longPressTimer) {
                 clearTimeout(this.longPressTimer);
                 this.longPressTimer = null;
-                // If timer cleared, it's a short tap – will be handled by clickCell
             }
         },
         toggleBonus() {
@@ -185,20 +214,48 @@ const app = createApp({
             const key = e.key;
 
             if (this.directionMode && this.directionAnchor) {
-                if (key.startsWith('Arrow')) {
+                // Arrow keys: move anchor in that direction (preserve direction mode)
+                if (key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight') {
+                    e.preventDefault();
+                    let newRow = this.cursor.row;
+                    let newCol = this.cursor.col;
+                    if (key === 'ArrowUp') newRow = Math.max(1, this.cursor.row - 1);
+                    else if (key === 'ArrowDown') newRow = Math.min(SIZE, this.cursor.row + 1);
+                    else if (key === 'ArrowLeft') newCol = Math.max(1, this.cursor.col - 1);
+                    else if (key === 'ArrowRight') newCol = Math.min(SIZE, this.cursor.col + 1);
+                    this.directionAnchor = { row: newRow, col: newCol };
+                    this.cursor = { row: newRow, col: newCol };
+                    this.directionPos = 0;  // reset typing offset
+                    return;
+                }
+                // Enter: toggle orientation (only if no letters typed yet)
+                if (key === 'Enter') {
+                    e.preventDefault();
+                    if (this.directionPos === 0) {
+                        this.directionOrientation = this.directionOrientation === 'right' ? 'down' : 'right';
+                    }
+                    return;
+                }
+                // Escape: exit direction mode
+                if (key === 'Escape') {
                     e.preventDefault();
                     this.directionMode = false;
                     this.directionAnchor = null;
-                } else if (key === ' ') {
+                    return;
+                }
+                // Space
+                if (key === ' ') {
                     e.preventDefault();
-                    const nxt = this.directionPos+1;
+                    const nxt = this.directionPos + 1;
                     const nc = this.getCellAt(nxt);
                     if (nc.row>=1 && nc.row<=SIZE && nc.col>=1 && nc.col<=SIZE) {
                         this.directionPos = nxt;
                         this.cursor = {row:nc.row, col:nc.col};
                     }
                     return;
-                } else if (key === 'Backspace' || key === 'Delete') {
+                }
+                // Backspace/Delete
+                if (key === 'Backspace' || key === 'Delete') {
                     e.preventDefault();
                     if (this.directionPos > 0) {
                         this.directionPos--;
@@ -214,23 +271,24 @@ const app = createApp({
                         }
                     }
                     return;
-                } else if (key.length === 1 && key.toUpperCase() in POINTS) {
-                    e.preventDefault();
-                    const letter = key.toUpperCase();
-                    const cell = this.getCellAt(this.directionPos);
-                    if (cell.row<1||cell.row>SIZE||cell.col<1||cell.col>SIZE) return;
-                    this.board[cell.row-1][cell.col-1] = letter;
-                    this.cursor = {row:cell.row, col:cell.col};
-                    this.directionPos++;
+                }
+                // Letter
+                if (key.length === 1) {
+                    const letter = turkishUpper(key);
+                    if (letter in POINTS) {
+                        e.preventDefault();
+                        const cell = this.getCellAt(this.directionPos);
+                        if (cell.row<1||cell.row>SIZE||cell.col<1||cell.col>SIZE) return;
+                        this.board[cell.row-1][cell.col-1] = letter;
+                        this.cursor = {row:cell.row, col:cell.col};
+                        this.directionPos++;
+                    }
                     return;
-                } else if (key === 'Escape') {
-                    this.directionMode = false;
-                    this.directionAnchor = null;
                 }
                 return;
             }
 
-            // Normal mode
+            // Normal mode (no direction)
             if (key.startsWith('Arrow')) {
                 e.preventDefault();
                 if (key === 'ArrowUp' && this.cursor.row>1) this.cursor.row--;
@@ -240,9 +298,12 @@ const app = createApp({
             } else if (key === 'Backspace' || key === 'Delete') {
                 e.preventDefault();
                 this.clearCell(this.cursor.row, this.cursor.col);
-            } else if (key.length === 1 && key.toUpperCase() in POINTS) {
-                e.preventDefault();
-                this.board[this.cursor.row-1][this.cursor.col-1] = key.toUpperCase();
+            } else if (key.length === 1) {
+                const letter = turkishUpper(key);
+                if (letter in POINTS) {
+                    e.preventDefault();
+                    this.board[this.cursor.row-1][this.cursor.col-1] = letter;
+                }
             }
         },
         onRackKey(e) {
@@ -250,17 +311,87 @@ const app = createApp({
             if (key === 'Backspace' || key === 'Delete') {
                 e.preventDefault();
                 if (this.rack.length > 0) this.rack.pop();
-            } else if (key.length === 1 && key.toUpperCase() in POINTS) {
-                e.preventDefault();
-                if (this.rack.length < 7) this.rack.push(key.toUpperCase());
+            } else if (key.length === 1) {
+                const letter = turkishUpper(key);
+                if (letter in POINTS) {
+                    e.preventDefault();
+                    if (this.rack.length < 7) this.rack.push(letter);
+                }
             }
         },
-
         focusBoardInput() { this.$refs.boardInput?.focus(); },
         onBoardInputBlur() {},
         focusRackInput() { this.$refs.rackInput?.focus(); },
 
-        // Save & Load
+        triggerSolve() {
+            if (solveTimer) clearTimeout(solveTimer);
+            solveTimer = setTimeout(() => {
+                this.solveBoard();
+            }, 400);
+        },
+
+        async solveBoard() {
+            if (this.rack.length === 0) {
+                this.results = [];
+                this.highlightedMove = null;
+                return;
+            }
+            this.solving = true;
+            const payload = {
+                board: this.board,
+                rack: this.rack,
+                bonus: this.bonusKey ? this.bonusKey.split(',').map(Number) : null
+            };
+            try {
+                const res = await fetch('/solve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) throw new Error('Sunucu hatası');
+                const data = await res.json();
+                this.results = data;
+                if (data.length > 0) {
+                    this.highlightedMove = data[0];
+                } else {
+                    this.highlightedMove = null;
+                }
+            } catch (err) {
+                console.error('Çözüm alınamadı:', err);
+            } finally {
+                this.solving = false;
+            }
+        },
+
+        applyMove(move) {
+            const oldBoard = this.board.map(row => [...row]);
+            const dr = move.direction === 'down' ? 1 : 0;
+            const dc = move.direction === 'right' ? 1 : 0;
+            const newCells = [];
+            for (let i = 0; i < move.word.length; i++) {
+                const r = move.start_row + i*dr;
+                const c = move.start_col + i*dc;
+                if (!oldBoard[r-1][c-1]) {
+                    newCells.push({ row: r, col: c });
+                }
+                this.board[r-1][c-1] = move.word[i];
+            }
+            for (const lt of move.rack_used) {
+                const idx = this.rack.indexOf(lt);
+                if (idx !== -1) {
+                    this.rack.splice(idx, 1);
+                }
+            }
+            this.highlightedCells = newCells;
+            this.highlightedMove = move;
+            this.results = [];
+        },
+
+        highlightMove(move) {
+            this.highlightedMove = move;
+            this.highlightedCells = [];
+        },
+
         saveGame() {
             const state = { board: this.board, rack: this.rack, bonusKey: this.bonusKey };
             setCookie('kelimelik_save', JSON.stringify(state));
@@ -287,19 +418,27 @@ const app = createApp({
             this.directionMode = false;
             this.directionAnchor = null;
             this.cursor = { row: 8, col: 8 };
+            this.results = [];
+            this.highlightedMove = null;
+            this.highlightedCells = [];
         }
     },
     mounted() {
         this.loadGame();
+        this.$nextTick(() => {
+            this.triggerSolve();
+        });
 
-        watch(() => this.board, (newVal) => this.saveGame(), { deep: true });
-        watch(() => this.rack, (newVal) => this.saveGame(), { deep: true });
-        watch(() => this.bonusKey, (newVal) => this.saveGame());
+        watch(() => this.board, this.saveGame, { deep: true });
+        watch(() => this.rack, this.saveGame, { deep: true });
+        watch(() => this.bonusKey, this.saveGame);
+
+        watch(() => this.board, () => { this.highlightedCells = []; this.triggerSolve(); }, { deep: true });
+        watch(() => this.rack, () => { this.highlightedCells = []; this.triggerSolve(); }, { deep: true });
+        watch(() => this.bonusKey, () => { this.highlightedCells = []; this.triggerSolve(); });
 
         document.addEventListener('click', (e) => {
-            if (this.ctxMenu && !e.target.closest('.context-menu')) {
-                this.ctxMenu = null;
-            }
+            if (this.ctxMenu && !e.target.closest('.context-menu')) this.ctxMenu = null;
         });
     }
 });

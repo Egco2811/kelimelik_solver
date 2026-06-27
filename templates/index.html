@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Kelimelik Solver</title>
+    <title>Kelimelik Çözücü</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -25,10 +25,14 @@
                             @touchstart.stop="handleTouchStart(r,c,$event)"
                             @touchmove.stop="handleTouchMove"
                             @touchend.stop="handleTouchEnd($event)">
+                            <!-- Premium overlay (no letter) -->
                             <span v-if="!board[r-1][c-1] && premiumType(r,c)" class="premium-text" v-html="premiumLabel(r,c)"></span>
-                            <span v-if="board[r-1][c-1]" class="tile-content">
-                                {{ board[r-1][c-1] }}<span class="tile-point">{{ points[board[r-1][c-1]] }}</span>
-                            </span>
+                            <!-- Letter -->
+                            <template v-if="board[r-1][c-1]">
+                                <span class="tile-letter">{{ board[r-1][c-1] }}</span>
+                                <span class="tile-point">{{ points[board[r-1][c-1]] }}</span>
+                            </template>
+                            <!-- Direction arrow for next empty cell -->
                             <span v-if="isNextCell(r,c) && !board[r-1][c-1]" class="next-arrow">
                                 {{ directionOrientation === 'right' ? '→' : '↓' }}
                             </span>
@@ -54,9 +58,26 @@
                 </div>
             </div>
 
-            <!-- Reset Button -->
-            <div class="text-center">
-                <button class="btn btn-wood" @click="resetGame">Yeni Oyun</button>
+            <!-- Buttons -->
+            <div class="text-center mt-3">
+                <button class="btn btn-wood me-2" @click="resetGame">Yeni Oyun</button>
+            </div>
+
+            <!-- Results -->
+            <div v-if="results.length > 0" class="results-container mt-3">
+                <h3 class="text-light">Önerilen Hamleler</h3>
+                <div v-for="(move, idx) in results" :key="idx" class="result-item"
+                     @click="applyMove(move)">
+                    <div class="d-flex justify-content-between">
+                        <strong>{{ move.word }}</strong>
+                        <span class="badge bg-success">{{ move.score }} puan</span>
+                    </div>
+                    <small>
+                        Başlangıç: {{ move.start_row }}, {{ move.start_col }} |
+                        Yön: {{ move.direction === 'right' ? 'Yatay' : 'Dikey' }} |
+                        Kullanılan: {{ move.rack_used.join(', ') }}
+                    </small>
+                </div>
             </div>
 
             <!-- Context Menu -->

@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700&display=swap');
+
 /* ---------- General ---------- */
 body {
     background: linear-gradient(135deg, #3e3a39 0%, #2b2a27 100%);
@@ -8,8 +10,8 @@ body {
     margin: 0;
     font-family: 'Segoe UI', Tahoma, sans-serif;
     user-select: none;
-    -webkit-user-select: none;          /* iOS Safari */
-    -webkit-touch-callout: none;       /* disable callout on long press */
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 }
 .game-container {
     background: #1e1b18;
@@ -20,9 +22,6 @@ body {
     max-width: 100vw;
     box-sizing: border-box;
     overflow: hidden;
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-touch-callout: none;
 }
 h1 {
     font-weight: 700;
@@ -31,11 +30,7 @@ h1 {
     letter-spacing: 2px;
     margin-bottom: 0.5rem;
 }
-
-/* Hide Vue template until it compiles */
-[v-cloak] {
-    display: none !important;
-}
+[v-cloak] { display: none !important; }
 
 /* ---------- Board ---------- */
 .board-wrapper {
@@ -51,32 +46,27 @@ h1 {
     display: flex;
     align-items: center;
     justify-content: center;
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-touch-callout: none;
 }
 table#board {
     border-collapse: collapse;
     width: 100%;
     height: 100%;
     table-layout: fixed;
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-touch-callout: none;
 }
 td {
     text-align: center;
     vertical-align: middle;
     font-size: calc(min(4vw, 3.5vh));
-    font-weight: bold;
+    font-weight: 700;
     border: 1px solid #b8a88a;
     cursor: pointer;
     position: relative;
     background: #f5e8d1;
     color: #3b2f25;
     overflow: hidden;
-    user-select: none;
+    font-family: 'Nunito', 'Segoe UI', Tahoma, sans-serif;
     -webkit-user-select: none;
+    user-select: none;
     -webkit-touch-callout: none;
 }
 td.empty { background: #f5e8d1; }
@@ -87,19 +77,39 @@ td.dl { background: #98bac5; color: white; }
 td.star { background: #f3d386; }
 td.bonus { background: #f3d386; }
 
+/* Tile when letter is placed */
+td.has-letter {
+    background: #ecc426 !important;
+    color: #84553f !important;
+}
+.tile-letter {
+    position: relative;
+    z-index: 1;
+}
+.tile-point {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 0.45em;
+    font-weight: 700;
+    color: #84553f;
+    line-height: 1;
+    z-index: 0;
+}
+
+/* Premium overlays (empty premium cells) */
 .premium-text {
     display: flex;
     align-items: center;
     justify-content: center;
     width: 100%;
     height: 100%;
+    z-index: 1;
 }
-
 td.star .premium-text,
 td.bonus .premium-text {
     position: absolute;
-    top: 0;
-    left: 0;
+    top: 0; left: 0;
     width: 100%;
     height: 100%;
     display: flex;
@@ -124,22 +134,13 @@ td.bonus .premium-text {
     line-height: 1;
 }
 
-.tile-content {
-    display: inline-block;
-    line-height: 1;
-}
-.tile-point {
-    font-size: 0.6em;
-    color: #555;
-    display: block;
-    margin-top: -2px;
-}
-
+/* Cursor – always on top */
 td.cursor {
     box-shadow: inset 0 0 0 3px #ff8800, 0 0 8px #ff8800;
-    z-index: 2;
+    z-index: 10;
 }
 
+/* Direction arrow */
 .next-arrow {
     font-size: 1.2em;
     color: rgba(0,0,0,0.25);
@@ -149,23 +150,31 @@ td.cursor {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+    z-index: 0;
 }
 td.next-cell {
     background: #f9f0e0;
 }
 
-/* ---------- Rack ---------- */
-.rack-section {
-    margin-top: 1rem;
+/* Highlighted move & new tile */
+td.highlight-cell {
+    outline: 3px solid #00ff88;
+    outline-offset: -3px;
+    z-index: 8;
 }
+td.new-tile {
+    background: #aaddff !important;
+    color: #000;
+    box-shadow: inset 0 0 8px #00aaff;
+}
+
+/* ---------- Rack ---------- */
+.rack-section { margin-top: 1rem; }
 .rack-label {
     color: #c4a87c;
     font-size: 1.2rem;
     font-weight: 600;
     margin-bottom: 10px;
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-touch-callout: none;
 }
 .rack-input-container {
     background: #1e1b18;
@@ -182,9 +191,6 @@ td.next-cell {
     cursor: text;
     outline: none;
     position: relative;
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-touch-callout: none;
 }
 .rack-input-container.rack-focused {
     border-color: #f1c40f;
@@ -195,13 +201,9 @@ td.next-cell {
     font-size: 1.1rem;
     pointer-events: none;
     position: absolute;
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-touch-callout: none;
 }
 .rack-tile {
-    width: 58px;
-    height: 70px;
+    width: 58px; height: 70px;
     background: #e8d5b7;
     border: 2px solid #8b7355;
     border-radius: 6px;
@@ -214,14 +216,8 @@ td.next-cell {
     color: #3b2f25;
     box-shadow: 0 4px 8px rgba(0,0,0,0.3);
     z-index: 1;
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-touch-callout: none;
 }
-.rack-tile .point {
-    font-size: 11px;
-    color: #5c4a3a;
-}
+.rack-tile .point { font-size: 11px; color: #5c4a3a; }
 
 /* ---------- Buttons ---------- */
 .btn-wood {
@@ -235,13 +231,27 @@ td.next-cell {
     transition: 0.2s;
     font-size: 1rem;
     margin-top: 1rem;
-    user-select: none;
-    -webkit-user-select: none;
-    -webkit-touch-callout: none;
+    position: relative;
 }
-.btn-wood:hover {
-    background: #6b553f;
-    color: #f1d5a5;
+.btn-wood:hover { background: #6b553f; color: #f1d5a5; }
+.btn-wood:disabled { opacity: 0.7; cursor: not-allowed; }
+.me-2 { margin-right: 0.5rem; }
+
+/* Spinner for solver */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.spinner {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 0.8s linear infinite;
+    margin-right: 4px;
+    vertical-align: middle;
 }
 
 /* ---------- Context Menu ---------- */
@@ -261,16 +271,34 @@ td.next-cell {
     font-weight: 500;
     border-bottom: 1px solid #4a3f35;
 }
-.context-item:hover {
-    background: #4a3f35;
-}
+.context-item:hover { background: #4a3f35; }
 .context-item:last-child { border-bottom: none; }
 
-/* ---------- Hidden Inputs (mobile keyboard) ---------- */
+/* ---------- Results Panel ---------- */
+.results-container {
+    background: #2c2c2c;
+    border-radius: 12px;
+    padding: 1rem;
+    max-height: 300px;
+    overflow-y: auto;
+    text-align: left;
+}
+.result-item {
+    background: #3a3a3a;
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    color: #e0d6c8;
+    transition: background 0.2s;
+}
+.result-item:hover { background: #4a4a4a; }
+.result-item .badge { font-size: 1rem; }
+
+/* ---------- Hidden Inputs ---------- */
 .hidden-input {
     position: absolute;
-    width: 1px;
-    height: 1px;
+    width: 1px; height: 1px;
     opacity: 0;
     border: none;
     outline: none;
