@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Kelimelik Solver</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #3e3a39 0%, #2b2a27 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            user-select: none;
+        }
+        .game-container {
+            background: #1e1b18;
+            border-radius: 24px;
+            padding: 2rem;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+            max-width: 900px;
+        }
+        h1 {
+            font-weight: 700;
+            color: #f1d5a5;
+            text-shadow: 2px 2px 4px #000;
+            letter-spacing: 2px;
+        }
+        .board-wrapper {
+            background: #4a3f35;
+            border: 4px solid #8b7355;
+            border-radius: 16px;
+            padding: 12px;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
+        }
+        table#board {
+            border-collapse: collapse;
+            margin: 0 auto;
+        }
+        td {
+            width: 48px;
+            height: 48px;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 20px;
+            font-weight: bold;
+            border: 1px solid #b8a88a;
+            cursor: pointer;
+            position: relative;
+            background: #f5e8d1;
+            color: #3b2f25;
+        }
+        td.empty { background: #f5e8d1; }
+        td.tw { background: #beab97; color: white; }
+        td.tl { background: #ceb9cc; color: white; }
+        td.dw { background: #a3c19b; color: white; }
+        td.dl { background: #98bac5; color: white; }
+        td.star { background: #f3d386; }
+        td.bonus { background: #f3d386; }
+
+        .premium-text {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+        .multiplier-label {
+            position: relative;
+            display: inline-block;
+            font-weight: 800;
+        }
+        .mult-letter {
+            font-size: 18px;
+            line-height: 1;
+        }
+        .multiplier-label sup {
+            position: absolute;
+            top: -0.2em;
+            right: -0.6em;
+            font-size: 0.55em;
+            line-height: 1;
+        }
+
+        .tile-content {
+            display: inline-block;
+            line-height: 1;
+        }
+        .tile-point {
+            font-size: 9px;
+            color: #555;
+            display: block;
+            margin-top: -2px;
+        }
+
+        td.cursor {
+            box-shadow: inset 0 0 0 3px #ff8800, 0 0 8px #ff8800;
+            z-index: 2;
+        }
+
+        .next-arrow {
+            font-size: 22px;
+            color: rgba(0,0,0,0.25);
+            font-weight: bold;
+            pointer-events: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        td.next-cell {
+            background: #f9f0e0;
+        }
+
+        .rack-section {
+            margin-top: 2rem;
+        }
+        .rack-label {
+            color: #c4a87c;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .rack-input-container {
+            background: #1e1b18;
+            border: 2px solid #8b7355;
+            border-radius: 12px;
+            padding: 12px;
+            min-height: 85px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            cursor: text;
+            outline: none;
+        }
+        .rack-input-container.rack-focused {
+            border-color: #f1c40f;
+            box-shadow: 0 0 15px rgba(241,196,15,0.5);
+        }
+        .rack-placeholder {
+            color: #7a7265;
+            font-size: 1.1rem;
+            pointer-events: none;
+            position: absolute;
+        }
+        .rack-tile {
+            width: 58px;
+            height: 70px;
+            background: #e8d5b7;
+            border: 2px solid #8b7355;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            font-weight: bold;
+            color: #3b2f25;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            z-index: 1;
+        }
+        .rack-tile .point {
+            font-size: 11px;
+            color: #5c4a3a;
+        }
+        .btn-wood {
+            background: #8b7355;
+            color: white;
+            border: 2px solid #5c4a3a;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 1rem;
+        }
+        .btn-wood:hover {
+            background: #6b553f;
+            color: #f1d5a5;
+        }
+        .context-menu {
+            position: fixed;
+            background: #2c2c2c;
+            border: 2px solid #8b7355;
+            border-radius: 10px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.9);
+            z-index: 1000;
+            overflow: hidden;
+        }
+        .context-item {
+            padding: 10px 20px;
+            cursor: pointer;
+            color: #e0d6c8;
+            font-weight: 500;
+            border-bottom: 1px solid #4a3f35;
+        }
+        .context-item:hover {
+            background: #4a3f35;
+        }
+        .context-item:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+    {% raw %}
+    <div id="app">
+        <div class="game-container text-center">
+            <h1 class="mb-4">KELİMELİK</h1>
+            <!-- Board -->
+            <div class="board-wrapper" tabindex="0" @keydown="onKey" @click="focusBoard" @contextmenu.prevent>
+                <table id="board">
+                    <tr v-for="r in 15" :key="r">
+                        <td v-for="c in 15" :key="c"
+                            :class="cellClass(r,c)"
+                            @click="clickCell(r,c)"
+                            @contextmenu.stop="rightClick(r,c,$event)">
+                            <span v-if="!board[r-1][c-1] && premiumType(r,c)" class="premium-text" v-html="premiumLabel(r,c)"></span>
+                            <span v-if="board[r-1][c-1]" class="tile-content">
+                                {{ board[r-1][c-1] }}<span class="tile-point">{{ points[board[r-1][c-1]] }}</span>
+                            </span>
+                            <span v-if="isNextCell(r,c) && !board[r-1][c-1]" class="next-arrow">
+                                {{ directionOrientation === 'right' ? '→' : '↓' }}
+                            </span>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Rack -->
+            <div class="rack-section">
+                <div class="rack-label">Elinizdeki Harfler</div>
+                <div class="rack-input-container" tabindex="0"
+                     :class="{ 'rack-focused': rackFocused }"
+                     @click="focusRack" @keydown="onRackKey"
+                     @focus="rackFocused=true" @blur="rackFocused=false">
+                    <div v-if="rack.length === 0" class="rack-placeholder">
+                        Buraya tıklayıp harf yazın...
+                    </div>
+                    <div v-for="(letter, idx) in rack" :key="idx" class="rack-tile">
+                        {{ letter }}<span class="point">{{ points[letter] }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Context Menu -->
+            <div v-if="ctxMenu" class="context-menu" :style="{left:ctxMenu.x+'px', top:ctxMenu.y+'px'}">
+                <div class="context-item" @click="toggleBonus">⭐⭐⭐ 25 Puan Bonusu</div>
+                <div class="context-item" @click="clearCell(ctxMenu.r, ctxMenu.c); ctxMenu=null">🗑️ Hücreyi Temizle</div>
+                <div class="context-item" @click="ctxMenu=null">İptal</div>
+            </div>
+        </div>
+    </div>
+    {% endraw %}
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
