@@ -57,37 +57,28 @@ class ScrabbleBoard:
             cr+=dr; cc+=dc
         return word, sr, sc
 
-    def _score_main(self, word, start_r, start_c, dr, dc, new_mask):
+    def _score_word(self, word, start_r, start_c, dr, dc, new_mask, joker_mask):
         score = 0
         mult = 1
-        bonus_added = False
-        for i,(lt,new) in enumerate(zip(word,new_mask)):
-            r = start_r + i*dr
-            c = start_c + i*dc
-            pt = POINTS[lt]
-            if new:
-                prem = PREMIUM[r][c]
-                if prem=='dl': pt*=2
-                elif prem=='tl': pt*=3
-                elif prem in ('dw','star'): mult*=2
-                elif prem=='tw': mult*=3
-                if self.bonus and (r,c)==self.bonus and not bonus_added:
-                    score += 25; bonus_added = True
-            score += pt
-        return score*mult
-
-    def _score_cross(self, word, start_r, start_c, dr, dc, new_positions):
-        total = 0
         for i, lt in enumerate(word):
             r = start_r + i*dr
             c = start_c + i*dc
-            pt = POINTS[lt]
-            if (r,c) in new_positions:
+            if joker_mask[i]:
+                pt = 0
+            else:
+                pt = POINTS[lt]
+            if new_mask[i]:
                 prem = PREMIUM[r][c]
-                if prem=='dl': pt*=2
-                elif prem=='tl': pt*=3
-            total += pt
-        return total
+                if prem == 'dl':
+                    pt *= 2
+                elif prem == 'tl':
+                    pt *= 3
+                elif prem in ('dw', 'star'):
+                    mult *= 2
+                elif prem == 'tw':
+                    mult *= 3
+            score += pt
+        return score * mult
 
     def generate_moves(self, rack, dictionary):
         moves = []
@@ -115,6 +106,26 @@ class ScrabbleBoard:
                         perp_dr, perp_dc = (1,0) if dr==0 else (0,1)
                         valid = True
                         cross_scores = 0
+                        # build mapping from new cell to rack symbol
+                        cell_to_rack = {}
+                        used_idx = 0
+                        for i, is_new in enumerate(new_mask):
+                            if is_new:
+                                cell_to_rack[(sr + i*dr, sc + i*dc)] = used[used_idx]
+                                used_idx += 1
+
+                        # compute main joker mask
+                        main_joker = [False] * len(prefix)
+                        used_idx = 0
+                        for i, is_new in enumerate(new_mask):
+                            if is_new:
+                                if used[used_idx] == '?':
+                                    main_joker[i] = True
+                                used_idx += 1
+
+                        main_score = self._score_word(prefix, sr, sc, dr, dc, new_mask, main_joker)
+
+                        # check cross words
                         for i, is_new in enumerate(new_mask):
                             if is_new:
                                 row_i = sr + i*dr
@@ -124,16 +135,25 @@ class ScrabbleBoard:
                                     if not dictionary.is_word(cross_word):
                                         valid = False
                                         break
-                                    cross_new_positions = set()
+                                    # build new_mask and joker_mask for this cross word
+                                    cross_new_mask = []
+                                    cross_joker = []
                                     for j, lt in enumerate(cross_word):
                                         tr = cross_sr + j*perp_dr
                                         tc = cross_sc + j*perp_dc
-                                        if (tr,tc) in new_cells:
-                                            cross_new_positions.add((tr,tc))
-                                    cross_scores += self._score_cross(cross_word, cross_sr, cross_sc, perp_dr, perp_dc, cross_new_positions)
+                                        is_new_cell = (tr, tc) in new_cells
+                                        cross_new_mask.append(is_new_cell)
+                                        if is_new_cell:
+                                            rack_sym = cell_to_rack.get((tr, tc))
+                                            cross_joker.append(rack_sym == '?')
+                                        else:
+                                            cross_joker.append(False)
+                                    cross_scores += self._score_word(cross_word, cross_sr, cross_sc, perp_dr, perp_dc, cross_new_mask, cross_joker)
+
                         if valid:
-                            main_score = self._score_main(prefix, sr, sc, dr, dc, new_mask)
                             total = main_score + cross_scores
+                            if self.bonus and self.bonus in new_cells:
+                                total += 25
                             if len(used) == 7:
                                 total += 50
                             moves.append({
