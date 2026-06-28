@@ -33,19 +33,19 @@ def is_valid_word(madde, entry=None):
     if not has_vowel(upper):
         return False
 
-    # Additional filtering using entry metadata (if provided)
-    if entry:
-        # Check if this is a chemical symbol or similar abbreviation
+    # Additional filtering: reject chemical symbols (e.g., Ac, Ag, Au)
+    # Only for short words (1-2 letters) to avoid over‑filtering
+    if entry and len(upper) <= 2:
         anlamlar = entry.get('anlamlarListe', [])
         for anlam in anlamlar:
             text = anlam.get('anlam', '')
+            # Check if definition indicates it's a symbol of an element
             if 'simgesi' in text or 'element' in text or 'sembolü' in text:
-                return False
-            # Also check for field categories
-            ozellikler = anlam.get('ozelliklerListe', [])
-            for oz in ozellikler:
-                if oz.get('tam_adi') == 'kimya' or oz.get('kisa_adi') == 'kim.':
-                    return False
+                # Check if the category is kimya
+                ozellikler = anlam.get('ozelliklerListe', [])
+                for oz in ozellikler:
+                    if oz.get('tam_adi') == 'kimya' or oz.get('kisa_adi') == 'kim.':
+                        return False
     return True
 
 def main():
