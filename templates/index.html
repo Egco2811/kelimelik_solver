@@ -14,9 +14,7 @@
         <div class="game-container text-center">
             <h1 class="mb-4">KELİMELİK ÇÖZÜCÜ</h1>
 
-            <!-- Main row: board+rack on left, results on right -->
             <div class="main-row">
-                <!-- Left column: board + rack + buttons -->
                 <div class="left-panel" ref="leftPanel">
                     <div class="board-wrapper" ref="boardWrapper" @click="focusBoardInput" @contextmenu.prevent>
                         <table id="board">
@@ -42,7 +40,6 @@
                         <input ref="boardInput" class="hidden-input" @keydown="onKey" @blur="onBoardInputBlur"/>
                     </div>
 
-                    <!-- Rack -->
                     <div class="rack-section">
                         <div class="rack-label">Elinizdeki Harfler</div>
                         <div class="rack-input-container"
@@ -51,24 +48,28 @@
                             <div v-if="rack.length === 0" class="rack-placeholder">
                                 Buraya tıklayıp harf yazın...
                             </div>
-                            <div v-for="(letter, idx) in rack" :key="idx" class="rack-tile">
-                                {{ letter }}<span class="point">{{ points[letter] }}</span>
+                            <div v-for="(letter, idx) in rack" :key="idx" class="rack-tile" :class="{ 'joker-tile': letter === '?' }">
+                                <template v-if="letter === '?'">
+                                    <span class="joker-placeholder">?</span>
+                                </template>
+                                <template v-else>
+                                    {{ letter }}<span class="point">{{ points[letter] }}</span>
+                                </template>
                             </div>
                             <input ref="rackInput" class="hidden-input" @keydown="onRackKey" @focus="rackFocused=true" @blur="rackFocused=false"/>
                         </div>
                     </div>
 
-                    <!-- Buttons -->
                     <div class="button-row">
-                        <button class="btn btn-wood me-2" @click="resetGame">Yeni Oyun</button>
-                        <button class="btn btn-wood me-2" @click="solveBoard" :disabled="solving">
+                        <button class="btn btn-wood" @click="resetGame">Yeni Oyun</button>
+                        <button class="btn btn-wood" @click="addJoker">Joker</button>
+                        <button class="btn btn-wood" @click="solveBoard" :disabled="solving">
                             <span v-if="solving" class="spinner"></span>
                             {{ solving ? 'Çözülüyor...' : 'En İyi Hamleyi Bul' }}
                         </button>
                     </div>
                 </div>
 
-                <!-- Right panel: results (only shown when results exist) -->
                 <div v-if="results.length > 0" class="results-panel">
                     <h3 class="text-light">Önerilen Hamleler</h3>
                     <div class="results-scroll">
@@ -88,7 +89,6 @@
                 </div>
             </div>
 
-            <!-- Context Menu -->
             <div v-if="ctxMenu" class="context-menu" :style="{left:ctxMenu.x+'px', top:ctxMenu.y+'px'}">
                 <div class="context-item" @click="toggleBonus">⭐⭐⭐ 25 Puan Bonusu</div>
                 <div class="context-item" @click="clearCell(ctxMenu.r, ctxMenu.c); ctxMenu=null">🗑️ Hücreyi Temizle</div>

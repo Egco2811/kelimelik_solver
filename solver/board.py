@@ -19,6 +19,8 @@ POINTS = {'A':1,'B':3,'C':4,'Ç':4,'D':3,'E':1,'F':7,'G':5,'Ğ':8,'H':5,
           'I':1,'İ':2,'J':10,'K':1,'L':1,'M':2,'N':1,'O':2,'Ö':7,
           'P':5,'R':1,'S':2,'Ş':4,'T':1,'U':2,'Ü':3,'V':7,'Y':3,'Z':4}
 
+ALLOWED_LETTERS = list(POINTS.keys())
+
 DIRS = [(0,1,'right'), (1,0,'down')]
 
 class ScrabbleBoard:
@@ -94,7 +96,6 @@ class ScrabbleBoard:
 
         for r,c in anchors:
             for dr,dc,dir_name in DIRS:
-                # find leftmost/upmost start position
                 sr,sc = r,c
                 while True:
                     nr,nc = sr-dr,sc-dc
@@ -104,9 +105,7 @@ class ScrabbleBoard:
                         break
 
                 def dfs(cr, cc, prefix, rack_left, used, new_mask, new_cells):
-                    # If we have placed at least one tile and the prefix is a valid word, record the move
                     if used and dictionary.is_word(prefix):
-                        # Validate cross-words
                         temp_board = [row[:] for row in self.board]
                         for i, lt in enumerate(prefix):
                             row_i = sr + i*dr
@@ -125,7 +124,6 @@ class ScrabbleBoard:
                                     if not dictionary.is_word(cross_word):
                                         valid = False
                                         break
-                                    # score cross-word, only new tiles matter
                                     cross_new_positions = set()
                                     for j, lt in enumerate(cross_word):
                                         tr = cross_sr + j*perp_dr
@@ -146,9 +144,7 @@ class ScrabbleBoard:
                                 'score': total,
                                 'rack_used': used[:]
                             })
-                        # Do NOT return here; continue to try longer extensions
 
-                    # Continue building
                     if cr >= SIZE or cc >= SIZE:
                         return
 
@@ -157,21 +153,22 @@ class ScrabbleBoard:
                         if dictionary.is_prefix(prefix + lt):
                             dfs(cr+dr, cc+dc, prefix+lt, rack_left, used, new_mask+[False], new_cells+[(cr,cc)])
                     else:
-                        # Try placing rack letters, but only if we haven't exhausted all letters
-                        tried = set()
-                        for i, lt in enumerate(rack_left):
-                            if lt in tried: continue
-                            tried.add(lt)
-                            new_pref = prefix + lt
-                            if dictionary.is_prefix(new_pref):
-                                dfs(cr+dr, cc+dc, new_pref,
-                                    rack_left[:i] + rack_left[i+1:],
-                                    used+[lt], new_mask+[True],
-                                    new_cells+[(cr,cc)])
+                        for i, tile in enumerate(rack_left):
+                            if tile == '?':
+                                letters_to_try = ALLOWED_LETTERS
+                            else:
+                                letters_to_try = [tile]
+                            for letter in letters_to_try:
+                                if dictionary.is_prefix(prefix + letter):
+                                    new_prefix = prefix + letter
+                                    new_used = used + [tile]
+                                    new_rack = rack_left[:i] + rack_left[i+1:]
+                                    dfs(cr+dr, cc+dc, new_prefix, new_rack,
+                                        new_used, new_mask+[True],
+                                        new_cells+[(cr,cc)])
 
                 dfs(sr, sc, '', rack_letters, [], [], [])
 
-        # Deduplicate by (word, start_row, start_col, direction) keeping highest score
         best = {}
         for m in moves:
             key = (m['word'], m['start_row'], m['start_col'], m['direction'])
