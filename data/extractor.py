@@ -13,16 +13,40 @@ def turkish_upper(s):
 def has_vowel(w):
     return any(ch in VOWELS for ch in w)
 
-def is_valid_word(w):
-    w = w.strip()
+def is_valid_word(madde, entry=None):
+    if not madde or not madde.strip():
+        return False
+    w = madde.strip()
     if len(w) < 2:
         return False
+    # Reject phrases (contain spaces)
+    if ' ' in w:
+        return False
+    # Reject entries with punctuation, parentheses, ellipsis, etc.
     if w.startswith('…') or '(' in w or ')' in w or '.' in w:
         return False
     upper = turkish_upper(w)
+    # Must be only Turkish letters
     if not re.match(r'^[ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ]+$', upper):
         return False
-    return has_vowel(upper)
+    # Must contain at least one vowel
+    if not has_vowel(upper):
+        return False
+
+    # Additional filtering using entry metadata (if provided)
+    if entry:
+        # Check if this is a chemical symbol or similar abbreviation
+        anlamlar = entry.get('anlamlarListe', [])
+        for anlam in anlamlar:
+            text = anlam.get('anlam', '')
+            if 'simgesi' in text or 'element' in text or 'sembolü' in text:
+                return False
+            # Also check for field categories
+            ozellikler = anlam.get('ozelliklerListe', [])
+            for oz in ozellikler:
+                if oz.get('tam_adi') == 'kimya' or oz.get('kisa_adi') == 'kim.':
+                    return False
+    return True
 
 def main():
     if len(sys.argv) != 2:
@@ -38,13 +62,16 @@ def main():
             data = json.loads(content)
             if isinstance(data, list):
                 for entry in data:
-                    madde = entry.get('madde', '')
-                    if is_valid_word(madde):
+                    madde = entry.get('madde', '').strip()
+                    if not madde:
+                        madde = entry.get('madde_duz', '').strip()
+                    if is_valid_word(madde, entry):
                         words.add(turkish_upper(madde))
             else:
-                # single object? fallback
-                madde = data.get('madde', '')
-                if is_valid_word(madde):
+                madde = data.get('madde', '').strip()
+                if not madde:
+                    madde = data.get('madde_duz', '').strip()
+                if is_valid_word(madde, data):
                     words.add(turkish_upper(madde))
         except json.JSONDecodeError:
             # JSON Lines format
@@ -55,8 +82,10 @@ def main():
                     continue
                 try:
                     entry = json.loads(line)
-                    madde = entry.get('madde', '')
-                    if is_valid_word(madde):
+                    madde = entry.get('madde', '').strip()
+                    if not madde:
+                        madde = entry.get('madde_duz', '').strip()
+                    if is_valid_word(madde, entry):
                         words.add(turkish_upper(madde))
                 except:
                     continue
