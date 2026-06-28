@@ -16,12 +16,13 @@ _set(3,3,'dw')
 _set(7,7,'star')
 
 POINTS = {'A':1,'B':3,'C':4,'Ç':4,'D':3,'E':1,'F':7,'G':5,'Ğ':8,'H':5,
-          'I':1,'İ':2,'J':10,'K':1,'L':1,'M':2,'N':1,'O':2,'Ö':7,
+          'I':2,'İ':1,'J':10,'K':1,'L':1,'M':2,'N':1,'O':2,'Ö':7,
           'P':5,'R':1,'S':2,'Ş':4,'T':1,'U':2,'Ü':3,'V':7,'Y':3,'Z':4}
 
 ALLOWED_LETTERS = list(POINTS.keys())
 
 DIRS = [(0,1,'right'), (1,0,'down')]
+NEIGHBOR_DIRS = [(-1,0), (1,0), (0,-1), (0,1)]
 
 class ScrabbleBoard:
     def __init__(self, board_state, bonus=None):
@@ -38,7 +39,7 @@ class ScrabbleBoard:
             for c in range(SIZE):
                 if not self.is_empty(r,c):
                     has_tile = True
-                    for dr,dc,_ in DIRS:
+                    for dr,dc in NEIGHBOR_DIRS:
                         nr,nc = r+dr,c+dc
                         if 0<=nr<SIZE and 0<=nc<SIZE and self.is_empty(nr,nc):
                             anchors.add((nr,nc))
@@ -87,107 +88,118 @@ class ScrabbleBoard:
 
         for r,c in anchors:
             for dr,dc,dir_name in DIRS:
-                sr,sc = r,c
+                run_r, run_c = r, c
                 while True:
-                    nr,nc = sr-dr,sc-dc
-                    if 0<=nr<SIZE and 0<=nc<SIZE and not self.is_empty(nr,nc):
-                        sr,sc = nr,nc
+                    pr,pc = run_r-dr, run_c-dc
+                    if 0<=pr<SIZE and 0<=pc<SIZE and not self.is_empty(pr,pc):
+                        run_r, run_c = pr, pc
                     else:
                         break
 
-                def dfs(cr, cc, prefix, rack_left, used, new_mask, new_cells):
-                    if used and dictionary.is_word(prefix):
-                        temp_board = [row[:] for row in self.board]
-                        for i, lt in enumerate(prefix):
-                            row_i = sr + i*dr
-                            col_i = sc + i*dc
-                            temp_board[row_i][col_i] = lt
+                anchor_offset = (r-run_r)*dr + (c-run_c)*dc
 
-                        perp_dr, perp_dc = (1,0) if dr==0 else (0,1)
-                        valid = True
-                        cross_scores = 0
-                        # build mapping from new cell to rack symbol
-                        cell_to_rack = {}
-                        used_idx = 0
-                        for i, is_new in enumerate(new_mask):
-                            if is_new:
-                                cell_to_rack[(sr + i*dr, sc + i*dc)] = used[used_idx]
-                                used_idx += 1
+                max_left = 0
+                er, ec = run_r-dr, run_c-dc
+                while (0<=er<SIZE and 0<=ec<SIZE and self.is_empty(er,ec)
+                       and max_left < len(rack_letters)):
+                    max_left += 1
+                    er -= dr; ec -= dc
 
-                        # compute main joker mask
-                        main_joker = [False] * len(prefix)
-                        used_idx = 0
-                        for i, is_new in enumerate(new_mask):
-                            if is_new:
-                                if used[used_idx] == '?':
-                                    main_joker[i] = True
-                                used_idx += 1
+                for left_len in range(max_left+1):
+                    start_r = run_r - left_len*dr
+                    start_c = run_c - left_len*dc
+                    anchor_index = left_len + anchor_offset
 
-                        main_score = self._score_word(prefix, sr, sc, dr, dc, new_mask, main_joker)
-
-                        # check cross words
-                        for i, is_new in enumerate(new_mask):
-                            if is_new:
+                    def dfs(cr, cc, prefix, rack_left, used, new_mask, new_cells,
+                            sr=start_r, sc=start_c, anchor_index=anchor_index):
+                        if used and len(prefix) > anchor_index and dictionary.is_word(prefix):
+                            temp_board = [row[:] for row in self.board]
+                            for i, lt in enumerate(prefix):
                                 row_i = sr + i*dr
                                 col_i = sc + i*dc
-                                cross_word, cross_sr, cross_sc = self._cross_word_at(row_i, col_i, perp_dr, perp_dc, temp_board)
-                                if len(cross_word) > 1:
-                                    if not dictionary.is_word(cross_word):
-                                        valid = False
-                                        break
-                                    # build new_mask and joker_mask for this cross word
-                                    cross_new_mask = []
-                                    cross_joker = []
-                                    for j, lt in enumerate(cross_word):
-                                        tr = cross_sr + j*perp_dr
-                                        tc = cross_sc + j*perp_dc
-                                        is_new_cell = (tr, tc) in new_cells
-                                        cross_new_mask.append(is_new_cell)
-                                        if is_new_cell:
-                                            rack_sym = cell_to_rack.get((tr, tc))
-                                            cross_joker.append(rack_sym == '?')
-                                        else:
-                                            cross_joker.append(False)
-                                    cross_scores += self._score_word(cross_word, cross_sr, cross_sc, perp_dr, perp_dc, cross_new_mask, cross_joker)
+                                temp_board[row_i][col_i] = lt
 
-                        if valid:
-                            total = main_score + cross_scores
-                            if self.bonus and self.bonus in new_cells:
-                                total += 25
-                            if len(used) == 7:
-                                total += 50
-                            moves.append({
-                                'word': prefix,
-                                'start_row': sr+1,
-                                'start_col': sc+1,
-                                'direction': dir_name,
-                                'score': total,
-                                'rack_used': used[:]
-                            })
+                            perp_dr, perp_dc = (1,0) if dr==0 else (0,1)
+                            valid = True
+                            cross_scores = 0
+                            cell_to_rack = {}
+                            used_idx = 0
+                            for i, is_new in enumerate(new_mask):
+                                if is_new:
+                                    cell_to_rack[(sr + i*dr, sc + i*dc)] = used[used_idx]
+                                    used_idx += 1
 
-                    if cr >= SIZE or cc >= SIZE:
-                        return
+                            main_joker = [False] * len(prefix)
+                            used_idx = 0
+                            for i, is_new in enumerate(new_mask):
+                                if is_new:
+                                    if used[used_idx] == '?':
+                                        main_joker[i] = True
+                                    used_idx += 1
 
-                    if not self.is_empty(cr, cc):
-                        lt = self.board[cr][cc]
-                        if dictionary.is_prefix(prefix + lt):
-                            dfs(cr+dr, cc+dc, prefix+lt, rack_left, used, new_mask+[False], new_cells+[(cr,cc)])
-                    else:
-                        for i, tile in enumerate(rack_left):
-                            if tile == '?':
-                                letters_to_try = ALLOWED_LETTERS
-                            else:
-                                letters_to_try = [tile]
-                            for letter in letters_to_try:
-                                if dictionary.is_prefix(prefix + letter):
-                                    new_prefix = prefix + letter
-                                    new_used = used + [tile]
-                                    new_rack = rack_left[:i] + rack_left[i+1:]
-                                    dfs(cr+dr, cc+dc, new_prefix, new_rack,
-                                        new_used, new_mask+[True],
-                                        new_cells+[(cr,cc)])
+                            main_score = self._score_word(prefix, sr, sc, dr, dc, new_mask, main_joker)
 
-                dfs(sr, sc, '', rack_letters, [], [], [])
+                            for i, is_new in enumerate(new_mask):
+                                if is_new:
+                                    row_i = sr + i*dr
+                                    col_i = sc + i*dc
+                                    cross_word, cross_sr, cross_sc = self._cross_word_at(row_i, col_i, perp_dr, perp_dc, temp_board)
+                                    if len(cross_word) > 1:
+                                        if not dictionary.is_word(cross_word):
+                                            valid = False
+                                            break
+                                        cross_new_mask = []
+                                        cross_joker = []
+                                        for j, lt in enumerate(cross_word):
+                                            tr = cross_sr + j*perp_dr
+                                            tc = cross_sc + j*perp_dc
+                                            is_new_cell = (tr, tc) in new_cells
+                                            cross_new_mask.append(is_new_cell)
+                                            if is_new_cell:
+                                                rack_sym = cell_to_rack.get((tr, tc))
+                                                cross_joker.append(rack_sym == '?')
+                                            else:
+                                                cross_joker.append(False)
+                                        cross_scores += self._score_word(cross_word, cross_sr, cross_sc, perp_dr, perp_dc, cross_new_mask, cross_joker)
+
+                            if valid:
+                                total = main_score + cross_scores
+                                if self.bonus and self.bonus in new_cells:
+                                    total += 25
+                                if len(used) == 7:
+                                    total += 30
+                                moves.append({
+                                    'word': prefix,
+                                    'start_row': sr+1,
+                                    'start_col': sc+1,
+                                    'direction': dir_name,
+                                    'score': total,
+                                    'rack_used': used[:]
+                                })
+
+                        if cr >= SIZE or cc >= SIZE:
+                            return
+
+                        if not self.is_empty(cr, cc):
+                            lt = self.board[cr][cc]
+                            if dictionary.is_prefix(prefix + lt):
+                                dfs(cr+dr, cc+dc, prefix+lt, rack_left, used, new_mask+[False], new_cells+[(cr,cc)])
+                        else:
+                            for i, tile in enumerate(rack_left):
+                                if tile == '?':
+                                    letters_to_try = ALLOWED_LETTERS
+                                else:
+                                    letters_to_try = [tile]
+                                for letter in letters_to_try:
+                                    if dictionary.is_prefix(prefix + letter):
+                                        new_prefix = prefix + letter
+                                        new_used = used + [tile]
+                                        new_rack = rack_left[:i] + rack_left[i+1:]
+                                        dfs(cr+dr, cc+dc, new_prefix, new_rack,
+                                            new_used, new_mask+[True],
+                                            new_cells+[(cr,cc)])
+
+                    dfs(start_r, start_c, '', rack_letters, [], [], [])
 
         best = {}
         for m in moves:
