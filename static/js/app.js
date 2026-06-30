@@ -68,6 +68,7 @@ const app = createApp({
             ctxMenu: null,
             rackFocused: false,
             bonusKey: null,
+            goalTile: null,
             points: POINTS,
 
             directionMode: false,
@@ -81,6 +82,7 @@ const app = createApp({
 
             solving: false,
             results: [],
+            errorMsg: null,
             highlightedMove: null,
             highlightedCells: [],
 
@@ -105,6 +107,7 @@ const app = createApp({
             if (this.isNextCell(r,c) && !this.board[r-1][c-1]) classes.push('next-cell');
             if (this.isHighlighted(r,c)) classes.push('highlight-cell');
             if (this.isNewTile(r,c)) classes.push('new-tile');
+            if (this.goalTile && this.goalTile.row === r && this.goalTile.col === c) classes.push('goal-tile');
             return classes.join(' ');
         },
         isHighlighted(r,c) {
@@ -167,7 +170,7 @@ const app = createApp({
                 this.ctxMenu.x = event.touches[0].clientX;
                 this.ctxMenu.y = event.touches[0].clientY;
             }
-            const mw = 200, mh = 160;
+            const mw = 200, mh = 200;
             if (this.ctxMenu.x + mw > window.innerWidth) this.ctxMenu.x = window.innerWidth - mw - 10;
             if (this.ctxMenu.y + mh > window.innerHeight) this.ctxMenu.y = window.innerHeight - mh - 10;
             if (this.ctxMenu.x < 10) this.ctxMenu.x = 10;
@@ -200,6 +203,16 @@ const app = createApp({
             const key = `${this.ctxMenu.r},${this.ctxMenu.c}`;
             this.bonusKey = (this.bonusKey === key) ? null : key;
             this.ctxMenu = null;
+        },
+        setGoal(r,c) {
+            this.goalTile = { row: r, col: c };
+            this.ctxMenu = null;
+            this.triggerSolve();
+        },
+        clearGoal() {
+            this.goalTile = null;
+            this.ctxMenu = null;
+            this.triggerSolve();
         },
         clearCell(r,c) { this.board[r-1][c-1] = null; },
         getCellAt(pos) {
@@ -337,12 +350,14 @@ const app = createApp({
         },
 
         async solveBoard() {
+            this.errorMsg = null;
             if (this.rack.length === 0) { this.results = []; this.highlightedMove = null; return; }
             this.solving = true;
             const payload = {
                 board: this.board,
                 rack: this.rack,
-                bonus: this.bonusKey ? this.bonusKey.split(',').map(Number) : null
+                bonus: this.bonusKey ? this.bonusKey.split(',').map(Number) : null,
+                goal: this.goalTile ? [this.goalTile.row, this.goalTile.col] : null
             };
             try {
                 const res = await fetch('/solve', {
@@ -353,8 +368,11 @@ const app = createApp({
                 if (!res.ok) throw new Error('Sunucu hatası');
                 const data = await res.json();
                 this.results = data;
+                if (data.length === 0 && this.goalTile) {
+                    this.errorMsg = 'Bu hedef kareden geçen hiçbir hamle bulunamadı.';
+                }
                 this.highlightedMove = data.length > 0 ? data[0] : null;
-            } catch (err) { console.error('Çözüm alınamadı:', err); }
+            } catch (err) { console.error('Çözüm alınamadı:', err); this.errorMsg = 'Çözüm alınamadı: ' + err.message; }
             finally { this.solving = false; }
         },
 
@@ -422,7 +440,7 @@ const app = createApp({
         },
 
         saveGame() {
-            const state = { board: this.board, rack: this.rack, bonusKey: this.bonusKey };
+            const state = { board: this.board, rack: this.rack, bonusKey: this.bonusKey, goalTile: this.goalTile };
             setCookie('kelimelik_save', JSON.stringify(state));
         },
         loadGame() {
@@ -433,6 +451,7 @@ const app = createApp({
                     if (state.board && Array.isArray(state.board) && state.board.length === SIZE) this.board = state.board;
                     if (state.rack && Array.isArray(state.rack)) this.rack = state.rack.slice(0, 7);
                     if (state.bonusKey !== undefined) this.bonusKey = state.bonusKey;
+                    if (state.goalTile) this.goalTile = state.goalTile;
                 } catch(e) {}
             }
         },
@@ -440,6 +459,7 @@ const app = createApp({
             this.board = Array(SIZE).fill().map(() => Array(SIZE).fill(null));
             this.rack = [];
             this.bonusKey = null;
+            this.goalTile = null;
             this.directionMode = false;
             this.directionAnchor = null;
             this.cursor = { row: 8, col: 8 };
@@ -447,6 +467,7 @@ const app = createApp({
             this.highlightedMove = null;
             this.highlightedCells = [];
             this.ctxMenu = null;
+            this.errorMsg = null;
         }
     },
     mounted() {
@@ -490,6 +511,11 @@ const app = createApp({
 
         watch(() => this.bonusKey, () => {
             this.highlightedCells = [];
+            this.saveGame();
+            this.triggerSolve();
+        });
+
+        watch(() => this.goalTile, () => {
             this.saveGame();
             this.triggerSolve();
         });

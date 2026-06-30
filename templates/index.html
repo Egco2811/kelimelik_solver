@@ -70,9 +70,10 @@
                     </div>
                 </div>
 
-                <div v-if="results.length > 0" class="results-panel">
+                <div v-if="results.length > 0 || errorMsg" class="results-panel">
                     <h3 class="text-light">Önerilen Hamleler</h3>
                     <div class="results-scroll">
+                        <div v-if="errorMsg" class="alert alert-warning">{{ errorMsg }}</div>
                         <div v-for="(move, idx) in results" :key="idx" class="result-item"
                              @click="applyMove(move)">
                             <div class="d-flex justify-content-between">
@@ -91,6 +92,8 @@
 
             <div v-if="ctxMenu" class="context-menu" :style="{left:ctxMenu.x+'px', top:ctxMenu.y+'px'}">
                 <div class="context-item" @click="toggleBonus">⭐⭐⭐ 25 Puan Bonusu</div>
+                <div class="context-item" @click="setGoal(ctxMenu.r, ctxMenu.c)">🎯 Hedef Kare Olarak Ayarla</div>
+                <div class="context-item" v-if="goalTile" @click="clearGoal()">❌ Hedef Kareyi Temizle</div>
                 <div class="context-item" @click="clearCell(ctxMenu.r, ctxMenu.c); ctxMenu=null">🗑️ Hücreyi Temizle</div>
                 <div class="context-item" @click="ctxMenu=null">İptal</div>
             </div>
